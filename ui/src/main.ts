@@ -644,7 +644,7 @@ function renderSchedule(): void {
       const minutes = Math.round(remaining / 60_000);
       const relative = new Intl.RelativeTimeFormat(lang(), { numeric: "auto" });
       text = t("schedule.next", {
-        time: minutes >= 60 ? relative.format(Math.round(minutes / 60), "hour") : relative.format(Math.max(1, minutes), "minute"),
+        time: minutes >= 60 ? relative.format(Math.round(minutes / 60), "hour") : `${Math.max(1, minutes)} ${t("settings.minutes")}`,
       });
     }
   } else {
