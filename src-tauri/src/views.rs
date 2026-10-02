@@ -73,6 +73,7 @@ pub struct TftView {
 pub struct AccountView {
     account_id: String,
     name: String,
+    riot_id_not_found: bool,
     region: String,
     region_display: String,
     description: String,
@@ -86,6 +87,7 @@ pub fn account_view(account: &Account) -> AccountView {
     AccountView {
         account_id: account.account_id.clone(),
         name: account.name.clone(),
+        riot_id_not_found: account.riot_id_not_found,
         region: account.region.clone(),
         region_display: account.region_display.clone(),
         description: account.description.clone(),

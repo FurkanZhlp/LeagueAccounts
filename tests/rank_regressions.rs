@@ -14,6 +14,31 @@ fn missing_riot_id_does_not_attempt_a_profile_lookup() {
 }
 
 #[test]
+fn missing_id_warning_survives_a_network_failure_and_clears_after_success() {
+    use leagueaccounts::models::{Account, RankInfo};
+    let mut account = Account {
+        name: "Old Name#TAG".into(),
+        ..Account::default()
+    };
+    RankInfo {
+        riot_id_not_found: Some(true),
+        ..RankInfo::error()
+    }
+    .apply_to(&mut account);
+    assert!(account.riot_id_not_found);
+    let json = serde_json::to_string(&account).unwrap();
+    account = serde_json::from_str(&json).unwrap();
+    RankInfo::error().apply_to(&mut account);
+    assert!(account.riot_id_not_found);
+    RankInfo {
+        riot_id_not_found: Some(false),
+        ..RankInfo::unranked()
+    }
+    .apply_to(&mut account);
+    assert!(!account.riot_id_not_found);
+}
+
+#[test]
 fn original_multiline_python_level_fixture_still_parses() {
     let html = r#"
         <html>

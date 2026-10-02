@@ -916,6 +916,9 @@ select option {
   line-height: 1.4;
   color: var(--muted);
 }
+.rank-not-found {
+  color: var(--danger);
+}
 .rank-edit {
   display: block;
   margin-top: 6px;

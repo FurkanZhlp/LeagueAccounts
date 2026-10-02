@@ -175,6 +175,7 @@ impl AccountManager {
             let account = Account {
                 account_id: account_id.clone(),
                 name: item.name,
+                riot_id_not_found: item.riot_id_not_found,
                 region: region.clone(),
                 region_display: if item.region_display.is_empty() {
                     region_display(&region)
@@ -267,6 +268,7 @@ fn run_rank_jobs(
 struct ExportAccount {
     account_id: String,
     name: String,
+    riot_id_not_found: bool,
     region: String,
     region_display: String,
     password: String,
@@ -285,6 +287,7 @@ impl From<&Account> for ExportAccount {
         Self {
             account_id: account.account_id.clone(),
             name: account.name.clone(),
+            riot_id_not_found: account.riot_id_not_found,
             region: account.region.clone(),
             region_display: account.region_display.clone(),
             password: account.password.clone(),
@@ -306,6 +309,8 @@ struct ImportAccount {
     account_id: String,
     #[serde(default)]
     name: String,
+    #[serde(default)]
+    riot_id_not_found: bool,
     #[serde(default)]
     region: String,
     #[serde(default)]
@@ -348,6 +353,7 @@ mod tests {
             thread::sleep(Duration::from_millis(20));
             self.active.fetch_sub(1, Ordering::SeqCst);
             RankInfo {
+                riot_id_not_found: Some(false),
                 tier: "Gold".into(),
                 division: "II".into(),
                 lp: "50".into(),

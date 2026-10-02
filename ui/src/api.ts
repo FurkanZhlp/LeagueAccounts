@@ -82,6 +82,7 @@ export type LoginResult = "signedIn" | "typed" | "alreadySignedIn" | "otherAccou
 export interface AccountView {
   accountId: string;
   name: string;
+  riotIdNotFound: boolean;
   region: string;
   regionDisplay: string;
   description: string;

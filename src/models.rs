@@ -5,6 +5,9 @@ use serde::{Deserialize, Serialize};
 pub struct Account {
     pub account_id: String,
     pub name: String,
+    /// Set only when both OP.GG profiles report that the saved Riot ID is missing.
+    #[serde(default)]
+    pub riot_id_not_found: bool,
     pub region: String,
     pub region_display: String,
     /// Passwords are never written to the normal accounts file. They are kept
@@ -91,6 +94,8 @@ pub struct AccountKey {
 /// Values returned by the rank provider.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct RankInfo {
+    /// `None` when a lookup cannot verify the Riot ID (for example a timeout).
+    pub riot_id_not_found: Option<bool>,
     pub tier: String,
     pub division: String,
     pub lp: String,
@@ -104,6 +109,7 @@ pub struct RankInfo {
 impl RankInfo {
     pub fn unranked() -> Self {
         Self {
+            riot_id_not_found: None,
             tier: "Unranked".to_owned(),
             division: String::new(),
             lp: String::new(),
@@ -116,6 +122,7 @@ impl RankInfo {
 
     pub fn error() -> Self {
         Self {
+            riot_id_not_found: None,
             tier: "Error".to_owned(),
             division: String::new(),
             lp: String::new(),
@@ -127,6 +134,9 @@ impl RankInfo {
     }
 
     pub fn apply_to(&self, account: &mut Account) {
+        if let Some(not_found) = self.riot_id_not_found {
+            account.riot_id_not_found = not_found;
+        }
         account.tier = if self.tier.is_empty() {
             "Unranked".to_owned()
         } else {

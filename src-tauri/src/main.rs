@@ -266,6 +266,7 @@ fn update_account(
         let renamed = account.name != name;
         account.name = name;
         if renamed {
+            account.riot_id_not_found = false;
             RankInfo::unranked().apply_to(account);
         }
         account.description = description.trim().to_owned();

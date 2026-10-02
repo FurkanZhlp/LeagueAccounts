@@ -23,6 +23,7 @@ const sample: AccountView[] = [
 ].map(([accountId, name, regionDisplay, level, description, lolRank, tftRank]) => ({
   accountId: accountId as string,
   name: name as string,
+  riotIdNotFound: false,
   region: (regionDisplay as string).toLowerCase(),
   regionDisplay: regionDisplay as string,
   level: level as string,
@@ -60,7 +61,11 @@ export function installMock(): void {
     listeners.pending.forEach((handler) => handler(targets.map((account) => ({ accountId: account.accountId, region: account.region }))));
     targets.forEach((account, index) => {
       setTimeout(() => {
-        if (find(account)?.name === account.name) listeners.update.forEach((handler) => handler(account));
+        const stored = find(account);
+        if (stored?.name === account.name) {
+          Object.assign(stored, account);
+          listeners.update.forEach((handler) => handler(stored));
+        }
         if (index === targets.length - 1) listeners.done.forEach((handler) => handler({ error: null, exclusive, auto: false }));
       }, 500 + index * 260);
     });
@@ -99,6 +104,7 @@ export function installMock(): void {
       const account: AccountView = {
         accountId: input.accountId,
         name: input.name.trim(),
+        riotIdNotFound: false,
         region: input.region.toLowerCase(),
         regionDisplay: input.region,
         description: input.description,
@@ -131,7 +137,7 @@ export function installMock(): void {
       const renamed = account.name !== name;
       Object.assign(account, { name, description });
       if (renamed) {
-        Object.assign(account, { level: "", lol: lol("Unranked", "", "", "N/A"), tft: tft("Unranked", "", "", "N/A") });
+        Object.assign(account, { riotIdNotFound: false, level: "", lol: lol("Unranked", "", "", "N/A"), tft: tft("Unranked", "", "", "N/A") });
         const updated = name ? { ...account, level: "30", lol: lol("Silver", "II", "45", "Bronze I") } : { ...account };
         setTimeout(() => fakeFetch([updated]), 50);
       }

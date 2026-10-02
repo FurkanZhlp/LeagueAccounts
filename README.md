@@ -65,6 +65,8 @@ Click **Add account** (or press `Ctrl+N`) and fill in:
 
 If you don't remember the Riot ID, leave it blank. You can still log in with one click. The card shows **No Riot ID associated** and an **Add Riot ID** action when you want to fetch ranks later.
 
+If a saved Riot ID can no longer be found on OP.GG, the card shows **Riot ID not found on OP.GG** and **Update Riot ID**. Enter the new `GameName#TAG` to fetch ranks again. Login still uses the saved username and password.
+
 To add several accounts at once, open the **Bulk add** tab and paste one account per line:
 
 ```text

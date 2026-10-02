@@ -36,13 +36,27 @@ impl RankFetcher {
             return RankInfo::unranked();
         }
         let url = self.build_opgg_url(&account.region, &account.name);
-        let mut rank = self.fetch_rank_from_url(&url);
         let tft_url = self.build_opgg_tft_url(&account.region, &account.name);
-        rank.tft = self.fetch_tft_from_url(&tft_url);
+        self.fetch_profiles(&url, &tft_url)
+    }
+
+    fn fetch_profiles(&self, lol_url: &str, tft_url: &str) -> RankInfo {
+        let mut rank = self.fetch_rank_from_url(lol_url);
+        match self.fetch_tft_from_url(tft_url) {
+            Ok(tft) => {
+                rank.tft = Some(tft);
+                rank.riot_id_not_found = Some(false);
+            }
+            Err(reason) => {
+                if rank.riot_id_not_found == Some(true) && reason != Reason::HttpNotFound {
+                    rank.riot_id_not_found = None;
+                }
+            }
+        }
         rank
     }
 
-    fn fetch_tft_from_url(&self, url: &str) -> Option<TftRank> {
+    fn fetch_tft_from_url(&self, url: &str) -> Result<TftRank, Reason> {
         self.fetch_page(url)
             .and_then(|body| {
                 let decoded_payload = decode_html_entities(&body).replace("\\\"", "\"");
@@ -52,7 +66,6 @@ impl RankFetcher {
                 Ok(self.parse_tft_from_opgg(&decoded_payload))
             })
             .inspect_err(|reason| logging::record(Event::TftFetchFailed, *reason))
-            .ok()
     }
 
     /// Parse the ranked TFT block of an OP.GG TFT profile payload.
@@ -145,7 +158,10 @@ impl RankFetcher {
             .map(|info| self.with_defaults(info))
             .unwrap_or_else(|reason| {
                 logging::record(Event::RankFetchFailed, reason);
-                RankInfo::error()
+                RankInfo {
+                    riot_id_not_found: (reason == Reason::HttpNotFound).then_some(true),
+                    ..RankInfo::error()
+                }
             })
     }
 
@@ -197,6 +213,7 @@ impl RankFetcher {
         let (reached, finished) = self.parse_last_season_from_opgg(&decoded_payload);
         rank.reached_last_season = reached;
         rank.finished_last_season = finished;
+        rank.riot_id_not_found = Some(false);
         Ok(rank)
     }
 
@@ -436,6 +453,7 @@ impl RankFetcher {
 
     fn with_defaults(&self, rank: RankInfo) -> RankInfo {
         RankInfo {
+            riot_id_not_found: rank.riot_id_not_found,
             tier: if rank.tier.is_empty() {
                 "Unranked".to_owned()
             } else {
@@ -537,6 +555,60 @@ mod tests {
     }
 
     #[test]
+    fn missing_riot_id_requires_both_profiles_to_be_not_found() {
+        use std::io::{BufRead, Write};
+        let cases = [
+            (404, 404, Some(true)),
+            (403, 404, None),
+            (404, 429, None),
+            (503, 503, None),
+            (404, 200, Some(false)),
+            (200, 404, Some(false)),
+            (200, 200, Some(false)),
+        ];
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = std::thread::spawn(move || {
+            for (lol, tft, _) in cases {
+                for status in [lol, tft] {
+                    let (mut stream, _) = listener.accept().unwrap();
+                    stream
+                        .set_read_timeout(Some(Duration::from_secs(5)))
+                        .unwrap();
+                    let mut reader = std::io::BufReader::new(&mut stream);
+                    let mut header = String::new();
+                    loop {
+                        header.clear();
+                        assert!(reader.read_line(&mut header).unwrap() > 0);
+                        if header == "\r\n" {
+                            break;
+                        }
+                    }
+                    let body = "<img src='profile_icons/profileIcon6.jpg'>";
+                    write!(stream, "HTTP/1.1 {status} Test\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
+                }
+            }
+        });
+        let fetcher = RankFetcher {
+            client: reqwest::blocking::Client::builder()
+                .no_proxy()
+                .timeout(Duration::from_secs(5))
+                .build()
+                .unwrap(),
+        };
+        for (lol, tft, expected) in cases {
+            assert_eq!(
+                fetcher
+                    .fetch_profiles(&format!("http://{address}/lol"), &format!("http://{address}/tft"))
+                    .riot_id_not_found,
+                expected,
+                "LoL={lol}, TFT={tft}"
+            );
+        }
+        server.join().unwrap();
+    }
+
+    #[test]
     fn http_failures_log_only_categories_without_urls_or_bodies() {
         use std::io::{BufRead, Write};
         let account_id = "PRIVATE_ACCOUNT_ID_c514";
@@ -572,7 +644,9 @@ mod tests {
         let url = format!("http://{address}/{account_id}?password={password}");
         let logs = logging::capture(|| {
             for _ in 0..4 {
-                assert_eq!(fetcher.fetch_rank_from_url(&url).tier, "Error");
+                let info = fetcher.fetch_rank_from_url(&url);
+                assert_eq!(info.tier, "Error");
+                assert_eq!(info.riot_id_not_found, None);
             }
         });
         server.join().unwrap();

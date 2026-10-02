@@ -141,9 +141,9 @@ function cardInner(account: AccountView, pending: boolean): string {
       <button class="icon-btn card-more" data-act="menu" title="${esc(t("card.more"))}">${icon("more")}</button>
     </div>
     <div class="rank-block${pending ? " is-pending" : ""}">
-      ${!account.name ? `
-      <div class="rank-notice">${esc(t("card.noRiotId"))}</div>
-      <button class="rank-edit" data-act="edit">${esc(t("card.addRiotId"))}</button>` : `
+      ${!account.name || account.riotIdNotFound ? `
+      <div class="rank-notice${account.riotIdNotFound ? " rank-not-found" : ""}">${esc(t(account.name ? "card.riotIdNotFound" : "card.noRiotId"))}</div>
+      <button class="rank-edit" data-act="edit">${esc(t(account.name ? "card.updateRiotId" : "card.addRiotId"))}</button>` : `
       <div class="rank-line">
         <span class="rank-name">${esc(rankLabel(rank))}</span>${lp}
       </div>
