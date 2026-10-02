@@ -5,13 +5,13 @@
 # League Accounts
 
 **All your League of Legends & Teamfight Tactics accounts in one place.**
-One-click login, live ranks, LP history and auto refresh — with passwords kept in Windows Credential Manager.
+One-click login, current ranks and auto refresh — with passwords kept in Windows Credential Manager.
 
 [![Latest release](https://img.shields.io/github/v/release/Tariolle/LeagueAccounts?label=download&color=c8aa6e)](https://github.com/Tariolle/LeagueAccounts/releases/latest)
 ![Windows](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0ac8b9)
 [![License: MIT](https://img.shields.io/badge/license-MIT-b47dff)](LICENSE)
 
-<img src="docs/screenshots/overview.gif" alt="League Accounts: account cards with ranks and LP trends, switching between League of Legends and TFT" width="960" />
+<img src="docs/screenshots/overview.gif" alt="League Accounts: account cards with current ranks, switching between League of Legends and TFT" width="960" />
 
 </div>
 
@@ -19,7 +19,6 @@ One-click login, live ranks, LP history and auto refresh — with passwords kept
 
 - **One-click login.** Press **Log in** and League Accounts opens the Riot Client, enters your credentials and launches the game: League of Legends, or Teamfight Tactics in TFT mode.
 - **LoL and TFT ranks.** Current rank, LP, level and last season's (or last set's) rank are pulled from OP.GG. Switch between modes with one click.
-- **LP history.** Every refresh is recorded. Cards show a trend line and the LP change over the last 24 hours, and each account has a full history chart.
 - **Auto refresh.** Ranks update in the background on your schedule, every 30 minutes by default.
 - **Duo finder.** The *Friend elo* filter shows which of your accounts can play ranked with a friend of a given rank.
 - **Safe by design.** Passwords live in Windows Credential Manager and never reach the interface. A copied password is wiped from the clipboard after 30 seconds.
@@ -30,15 +29,14 @@ One-click login, live ranks, LP history and auto refresh — with passwords kept
 <table>
   <tr>
     <td width="50%"><img src="docs/screenshots/login.gif" alt="Step-by-step login progress" /><br /><sub><b>Login, step by step:</b> opening the Riot Client, entering credentials, launching the game.</sub></td>
-    <td width="50%"><img src="docs/screenshots/chart.gif" alt="LP history chart" /><br /><sub><b>LP history:</b> tier bands, hover readout, 24h / 7d / 30d / all.</sub></td>
+    <td width="50%"><img src="docs/screenshots/list.png" alt="Compact list view" /><br /><sub><b>List view</b> for many accounts.</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/list.png" alt="Compact list view" /><br /><sub><b>List view</b> for many accounts.</sub></td>
     <td><img src="docs/screenshots/add.png" alt="Add account panel" /><br /><sub><b>Add one account or paste many at once.</b></sub></td>
+    <td><img src="docs/screenshots/settings.png" alt="Settings" /><br /><sub><b>Settings:</b> startup, refresh interval, login method, updates.</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/settings.png" alt="Settings" /><br /><sub><b>Settings:</b> startup, refresh interval, login method, updates.</sub></td>
-    <td><img src="docs/screenshots/menu.png" alt="Account context menu" /><br /><sub><b>Right-click</b> any account for every action.</sub></td>
+    <td colspan="2"><img src="docs/screenshots/menu.png" alt="Account context menu" /><br /><sub><b>Right-click</b> an account for its profile, editing and deletion.</sub></td>
   </tr>
 </table>
 
@@ -94,13 +92,12 @@ Prefer the old behavior? In **Settings → Login**, choose *Type into the previo
 
 ### LoL and TFT modes
 
-The switch at the top changes every rank, sort order, chart and filter between **League of Legends** (ranked solo/duo) and **Teamfight Tactics** (ranked). In TFT mode, **Log in** launches Teamfight Tactics when it is installed, otherwise League of Legends.
+The switch at the top changes every rank, sort order and filter between **League of Legends** (ranked solo/duo) and **Teamfight Tactics** (ranked). In TFT mode, **Log in** launches Teamfight Tactics when it is installed, otherwise League of Legends.
 
-### LP tracking and auto refresh
+### Rank updates
 
-- Each refresh stores a point whenever an account's rank or LP changes.
-- The card's trend line and **▲/▼ LP** badge show recent movement. Click the trend line, or choose **LP history** from the right-click menu, to open the full chart.
-- The **Auto refresh** widget in the sidebar shows when the next refresh happens. Change the interval (5 minutes to 24 hours) in **Settings → Rank updates**.
+- Cards show the latest rank and LP to help you choose an account. Refreshing replaces that rank data; the app does not collect LP progression.
+- The **Auto refresh** button in the sidebar shows when the next refresh happens. Click it to refresh immediately. Change the interval (5 minutes to 24 hours) in **Settings → Rank updates**.
 - Rank data comes from public OP.GG profile pages, two requests per account (LoL and TFT). Very short intervals with many accounts may get rate-limited.
 
 ## Settings
@@ -141,7 +138,6 @@ The switch at the top changes every rank, sort order, chart and filter between *
   | File | Contents |
   |---|---|
   | `league_accounts.json` | Accounts and ranks (no passwords) |
-  | `rank_history.json` | LP history |
   | `settings.json` | Your settings |
   | `logs\` | Diagnostic logs containing only fixed event codes, never account data |
 
@@ -168,7 +164,7 @@ npx tauri build --no-bundle  # build target/release/LeagueAccounts.exe
 
 | Folder | Contents |
 |---|---|
-| `src/` | Rust core: storage, Credential Manager, OP.GG parsing, LP history, Riot Client integration, auto-type |
+| `src/` | Rust core: storage, Credential Manager, OP.GG parsing, Riot Client integration, auto-type |
 | `src-tauri/` | Tauri shell: commands, auto refresh scheduler, settings, update checker |
 | `ui/` | Web interface (TypeScript + CSS); translations live in `ui/src/i18n.ts` |
 

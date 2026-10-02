@@ -6,7 +6,6 @@ import "./login.css";
 
 import { ApiError, api, events, keyId, keyOf, type AccountView, type Key, type Release, type Schedule, type Settings } from "./api";
 import { openLoginOverlay, type LoginOverlay } from "./login";
-import { deltaBadge, historySummary, recentDelta, renderHistoryChart, sparkline, type Range } from "./chart";
 import { LANGUAGES, applyStatic, errorText, lang, localizeRank, setLang, t, tierName, type Lang, type MessageKey } from "./i18n";
 import { $, closeMenu, contextMenu, esc, fragment, leave, modal, reducedMotion, toast } from "./dom";
 import { hydrateIcons, icon } from "./icons";
@@ -147,7 +146,6 @@ function cardInner(account: AccountView, pending: boolean): string {
       </div>
       <div class="lp-bar${APEX.has(tier) ? " apex" : ""}"><span style="--p:${lpProgress(rank)}"></span></div>
       <div class="history">${historyLine(account)}</div>
-      <div class="trend">${sparkline(account.trend[state.mode])}${deltaBadge(recentDelta(account.trend[state.mode]))}</div>
     </div>
     ${account.description ? `<p class="desc" title="${esc(account.description)}">${esc(account.description)}</p>` : `<p class="desc desc-empty"></p>`}
     <div class="card-actions">
@@ -493,7 +491,6 @@ function openMenu(account: AccountView, x: number, y: number): void {
       icon: "external-link",
       run: () => void guard(() => api.openProfile(keyOf(account), state.mode === "tft"), "toast.openFailed"),
     },
-    { label: t("menu.chart"), icon: "chart", run: () => void openChart(account) },
     { label: t("menu.edit"), icon: "pencil", run: () => void editAccount(account) },
     "sep",
     { label: t("menu.delete"), icon: "trash", danger: true, hint: "Del", run: () => void deleteAccount(account) },
@@ -514,56 +511,6 @@ async function refreshAll(): Promise<void> {
   }
   state.refreshTotal = count;
   renderSchedule();
-}
-
-// ---------------------------------------------------------------- LP history
-
-async function openChart(account: AccountView): Promise<void> {
-  const history = await guard(() => api.getHistory(keyOf(account)), "toast.openFailed");
-  if (!history) return;
-  let mode = state.mode;
-  let range: Range = "7d";
-  const rangeButtons = (["1d", "7d", "30d", "all"] as Range[])
-    .map((value) => {
-      const label = t(({ "1d": "chart.range1d", "7d": "chart.range7d", "30d": "chart.range30d", all: "chart.rangeAll" } as const)[value]);
-      return `<button type="button" data-range="${value}">${esc(label)}</button>`;
-    })
-    .join("");
-  void modal({
-    title: t("chart.title"),
-    wide: true,
-    body: `
-      <div class="chart-head">
-        <div class="confirm-account">${emblem(rankOf(account, state.mode).tier, 40)}<div><strong>${esc(account.name)}</strong><span>${esc(account.regionDisplay)} · ${esc(rankLabel(rankOf(account, state.mode)))}</span></div></div>
-        <div class="chart-controls">
-          <div class="segmented" data-group="mode">
-            <button type="button" data-chart-mode="lol">LoL</button><button type="button" data-chart-mode="tft">TFT</button>
-          </div>
-          <div class="segmented" data-group="range">${rangeButtons}</div>
-        </div>
-      </div>
-      <div class="chart-wrap"></div>
-      <div class="chart-summary"></div>
-      <p class="hint">${esc(t("chart.hint"))}</p>`,
-    actions: [{ label: t("common.close"), value: "close", kind: "primary" }],
-    onOpen: (root) => {
-      const draw = () => {
-        root.querySelectorAll<HTMLElement>("[data-range]").forEach((button) => button.classList.toggle("active", button.dataset.range === range));
-        root.querySelectorAll<HTMLElement>("[data-chart-mode]").forEach((button) => button.classList.toggle("active", button.dataset.chartMode === mode));
-        renderHistoryChart($(".chart-wrap", root), history[mode], range);
-        $(".chart-summary", root).innerHTML = historySummary(history[mode], range);
-      };
-      root.addEventListener("click", (event) => {
-        const target = event.target as HTMLElement;
-        const rangeButton = target.closest<HTMLElement>("[data-range]");
-        const modeButton = target.closest<HTMLElement>("[data-chart-mode]");
-        if (rangeButton) range = rangeButton.dataset.range as Range;
-        if (modeButton) mode = modeButton.dataset.chartMode as typeof mode;
-        if (rangeButton || modeButton) draw();
-      });
-      draw();
-    },
-  });
 }
 
 // ---------------------------------------------------------------- updates
@@ -1110,10 +1057,6 @@ function wire(): void {
     const account = byId(card.dataset.key ?? "");
     if (!account) return;
     select(card.dataset.key ?? null);
-    if ((event.target as Element).closest("[data-chart]")) {
-      void openChart(account);
-      return;
-    }
     const action = (event.target as HTMLElement).closest<HTMLElement>("[data-act]")?.dataset.act;
     if (action === "login") void login(account);
     if (action === "copy-id") void copyId(account);
@@ -1347,7 +1290,6 @@ function runDemoScene(): void {
       $("#accounts").innerHTML = "";
       render();
     }
-    if (scene === "chart") void openChart(byName("Kebab"));
     if (scene === "settings") void openSettings();
     if (scene === "add") openAddDrawer();
     if (scene === "login") void login(byName("Hextech"));

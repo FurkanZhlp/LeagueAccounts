@@ -12,7 +12,7 @@ const OUT = "docs/screenshots";
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Static screens: scene -> wait for animations to settle.
-const STILLS = { main: 2600, list: 2600, settings: 1500, add: 1500, menu: 1500, chart: 3200 };
+const STILLS = { main: 2600, list: 2600, settings: 1500, add: 1500, menu: 1500 };
 
 // Animated screens: scene -> scripted interaction while recording.
 const CLIPS = {
@@ -31,17 +31,6 @@ const CLIPS = {
   },
   login: async () => {
     await sleep(9000);
-  },
-  chart: async (page) => {
-    await sleep(2600);
-    const hit = await page.$(".hit");
-    const box = await hit.boundingBox();
-    for (let step = 0; step <= 24; step++) {
-      await page.mouse.move(box.x + (box.width * step) / 24, box.y + box.height / 2);
-      await sleep(70);
-    }
-    await page.click('[data-range="all"]');
-    await sleep(2200);
   },
 };
 

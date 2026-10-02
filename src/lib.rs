@@ -8,7 +8,6 @@
 pub mod account_manager;
 pub mod autotype;
 pub mod credentials;
-pub mod history;
 pub mod logging;
 pub mod models;
 pub mod rank_fetcher;

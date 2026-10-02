@@ -11,12 +11,11 @@ mod views;
 use leagueaccounts::account_manager::KEYRING_SERVICE;
 use leagueaccounts::autotype::auto_type_credentials;
 use leagueaccounts::credentials;
-use leagueaccounts::history::RankHistory;
 use leagueaccounts::logging::{self, Event, Reason};
 use leagueaccounts::models::{Account, AccountKey};
 use leagueaccounts::rank_fetcher::{RankFetcher, RankProvider};
 use leagueaccounts::riot_client::{self, Game, LoginOutcome, LoginStep};
-use leagueaccounts::utils::{app_data_dir, history_file, region_from_display, settings_file, REGION_MAP};
+use leagueaccounts::utils::{app_data_dir, region_from_display, settings_file, REGION_MAP};
 use leagueaccounts::AccountManager;
 use leagueaccounts::updates::{self, Release};
 use refresh::{
@@ -30,7 +29,7 @@ use std::thread;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
-use views::{account_view, fail, fail_with, AccountView, AppError, CommandResult, HistoryView, Key};
+use views::{account_view, fail, fail_with, AccountView, AppError, CommandResult, Key};
 
 /// Copied passwords are wiped from the clipboard after this delay.
 const PASSWORD_CLIPBOARD_TTL: Duration = Duration::from_secs(30);
@@ -98,22 +97,13 @@ fn manager(state: &Shared) -> CommandResult<MutexGuard<'_, AccountManager>> {
     state.manager.lock().map_err(|_| fail("storage_locked"))
 }
 
-fn history(state: &Shared) -> CommandResult<MutexGuard<'_, RankHistory>> {
-    state.history.lock().map_err(|_| fail("storage_locked"))
-}
-
 fn views(state: &Shared) -> CommandResult<Vec<AccountView>> {
     let manager = manager(state)?;
-    let history = history(state)?;
     Ok(manager
         .accounts
         .iter()
-        .map(|account| account_view(account, &history))
+        .map(account_view)
         .collect())
-}
-
-fn view_of(state: &Shared, account: &Account) -> CommandResult<AccountView> {
-    Ok(account_view(account, &*history(state)?))
 }
 
 fn password_for(account: &Account) -> String {
@@ -208,7 +198,7 @@ fn add_account(app: AppHandle, state: AppState<'_>, input: NewAccount) -> Comman
             .map_err(|error| fail_with("save_failed", error))?;
         account
     };
-    let view = view_of(&state, &account)?;
+    let view = account_view(&account);
     start_refresh(app, Arc::clone(&state), vec![account], RefreshKind::Partial);
     Ok(view)
 }
@@ -293,7 +283,7 @@ fn update_account(
             .map_err(|error| fail_with("save_failed", error))?;
         (updated, renamed)
     };
-    let view = view_of(&state, &updated)?;
+    let view = account_view(&updated);
     if renamed {
         start_refresh(app, Arc::clone(&state), vec![updated], RefreshKind::Partial);
     }
@@ -304,11 +294,7 @@ fn update_account(
 fn delete_account(state: AppState<'_>, key: Key) -> CommandResult<()> {
     manager(&state)?
         .delete_account(&key.account_id, &key.region)
-        .map_err(|error| fail_with("delete_failed", error))?;
-    let mut history = history(&state)?;
-    history.remove(&AccountKey::from(key));
-    let _ = history.save();
-    Ok(())
+        .map_err(|error| fail_with("delete_failed", error))
 }
 
 #[tauri::command]
@@ -322,14 +308,6 @@ fn refresh_ranks(app: AppHandle, state: AppState<'_>) -> CommandResult<usize> {
         return Err(fail("refresh_running"));
     }
     Ok(count)
-}
-
-#[tauri::command]
-fn get_history(state: AppState<'_>, key: Key) -> CommandResult<HistoryView> {
-    Ok(history(&state)?
-        .get(&AccountKey::from(key))
-        .map(HistoryView::from)
-        .unwrap_or_default())
 }
 
 #[tauri::command]
@@ -646,14 +624,12 @@ fn main() {
         .load_accounts()
         .err()
         .map(|error| fail_with("load_failed", error));
-    let history = RankHistory::load(history_file().unwrap_or_else(|_| "rank_history.json".into()));
     let settings_path = settings_file().ok();
     let settings = Settings::load(settings_path.as_ref());
     let start_minimized = settings.start_minimized && std::env::args().any(|arg| arg == AUTOSTART_FLAG);
 
     let shared = Arc::new(Shared {
         manager: Mutex::new(manager),
-        history: Mutex::new(history),
         settings: Mutex::new(settings),
         settings_path,
         refresh_running: Mutex::new(false),
@@ -676,7 +652,6 @@ fn main() {
             update_account,
             delete_account,
             refresh_ranks,
-            get_history,
             get_settings,
             update_settings,
             copy_account_id,
