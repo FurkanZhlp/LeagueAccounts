@@ -1228,7 +1228,8 @@ function populateRegions(): void {
   const all = state.regions.filter((region) => regions.includes(region));
   const select = $<HTMLSelectElement>("#region-filter");
   select.innerHTML = `<option value="all">${esc(t("toolbar.allRegions"))}</option>` + all.map((region) => `<option>${esc(region)}</option>`).join("");
-  select.value = all.includes(state.regionFilter) ? state.regionFilter : "all";
+  if (!all.includes(state.regionFilter)) state.regionFilter = "all";
+  select.value = state.regionFilter;
 }
 
 function moveSelection(step: number, columns: boolean): void {
