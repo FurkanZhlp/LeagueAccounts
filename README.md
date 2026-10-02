@@ -7,7 +7,7 @@
 **All your League of Legends & Teamfight Tactics accounts in one place.**
 One-click login, live ranks, LP history and auto refresh — with passwords kept in Windows Credential Manager.
 
-[![Latest release](https://img.shields.io/github/v/release/FurkanZhlp/LeagueAccounts?label=download&color=c8aa6e)](https://github.com/FurkanZhlp/LeagueAccounts/releases/latest)
+[![Latest release](https://img.shields.io/github/v/release/Tariolle/LeagueAccounts?label=download&color=c8aa6e)](https://github.com/Tariolle/LeagueAccounts/releases/latest)
 ![Windows](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0ac8b9)
 [![License: MIT](https://img.shields.io/badge/license-MIT-b47dff)](LICENSE)
 
@@ -44,7 +44,7 @@ One-click login, live ranks, LP history and auto refresh — with passwords kept
 
 ## Installation
 
-1. Download **`LeagueAccounts.exe`** from the [latest release](https://github.com/FurkanZhlp/LeagueAccounts/releases/latest).
+1. Download **`LeagueAccounts.exe`** from the [latest release](https://github.com/Tariolle/LeagueAccounts/releases/latest).
 2. Put it anywhere you like (for example `Documents\LeagueAccounts`) and run it. Nothing else needs to be installed.
 3. On first launch Windows SmartScreen may say *"Windows protected your PC"*, because the app is not code-signed. Click **More info → Run anyway**.
 
@@ -152,7 +152,7 @@ The switch at the top changes every rank, sort order, chart and filter between *
 | *Riot Client was not found* | Install the Riot Client, or switch **Settings → Login** to *Type into the previous window*. |
 | *The Riot Client login screen didn't appear in time* | Open the Riot Client once manually (it may be updating), then try again. |
 | Ranks show **Unavailable** | Check that the Riot ID (`Name#TAG`) and region are correct, then use **Refresh ranks**. OP.GG may also be rate-limiting; try again later. |
-| Something else | Open **Log folder** in the sidebar and attach the newest `.log` file to an [issue](https://github.com/FurkanZhlp/LeagueAccounts/issues). Logs contain no account data. |
+| Something else | Open **Log folder** in the sidebar and attach the newest `.log` file to an [issue](https://github.com/Tariolle/LeagueAccounts/issues). Logs contain no account data. |
 
 ## Building from source
 
@@ -172,9 +172,9 @@ npx tauri build --no-bundle  # build target/release/LeagueAccounts.exe
 | `src-tauri/` | Tauri shell: commands, auto refresh scheduler, settings, update checker |
 | `ui/` | Web interface (TypeScript + CSS); translations live in `ui/src/i18n.ts` |
 
-## Credits and disclaimer
+## License and disclaimer
 
-League Accounts builds on [LeagueAccounts](https://github.com/Tariolle/LeagueAccounts) by Florent Tariolle, licensed under the [MIT License](LICENSE).
+League Accounts is released under the [MIT License](LICENSE).
 
 League Accounts isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games, League of Legends and Teamfight Tactics are trademarks or registered trademarks of Riot Games, Inc. Rank data is provided by OP.GG; this project is not affiliated with OP.GG.
 

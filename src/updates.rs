@@ -4,7 +4,7 @@ use serde::Serialize;
 use std::time::Duration;
 
 /// `owner/name` of the repository whose releases are checked.
-pub const REPOSITORY: &str = "FurkanZhlp/LeagueAccounts";
+pub const REPOSITORY: &str = "Tariolle/LeagueAccounts";
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
