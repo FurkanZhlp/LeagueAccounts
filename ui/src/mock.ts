@@ -109,7 +109,7 @@ export function installMock(): void {
     bootstrap: async () => ({
       accounts,
       regions: ["EUW", "EUNE", "NA", "KR", "TR", "BR"],
-      version: "3.0.0",
+      version: "3.1.0",
       loggingAvailable: true,
       loadError: null,
       settings,

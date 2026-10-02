@@ -7,7 +7,7 @@
 **All your League of Legends & Teamfight Tactics accounts in one place.**
 One-click login, live ranks, LP history and auto refresh — with passwords kept in Windows Credential Manager.
 
-[![Latest release](https://img.shields.io/github/v/release/Tariolle/LeagueAccounts?label=download&color=c8aa6e)](https://github.com/Tariolle/LeagueAccounts/releases/latest)
+[![Latest release](https://img.shields.io/github/v/release/FurkanZhlp/LeagueAccounts?label=download&color=c8aa6e)](https://github.com/FurkanZhlp/LeagueAccounts/releases/latest)
 ![Windows](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0ac8b9)
 [![License: MIT](https://img.shields.io/badge/license-MIT-b47dff)](LICENSE)
 
@@ -23,7 +23,7 @@ One-click login, live ranks, LP history and auto refresh — with passwords kept
 - **Auto refresh.** Ranks update in the background on your schedule, every 30 minutes by default.
 - **Duo finder.** The *Friend elo* filter shows which of your accounts can play ranked with a friend of a given rank.
 - **Safe by design.** Passwords live in Windows Credential Manager and never reach the interface. A copied password is wiped from the clipboard after 30 seconds.
-- **Made for daily use.** Launch with Windows, start minimized, keyboard shortcuts, import/export, update notifications, and 5 languages (English, Türkçe, Deutsch, Español, Français).
+- **Made for daily use.** Launch with Windows, start minimized, keyboard shortcuts, import/export, update notifications, and 6 languages (English, Türkçe, Deutsch, Español, Français, Português).
 
 ## Screenshots
 
@@ -44,7 +44,7 @@ One-click login, live ranks, LP history and auto refresh — with passwords kept
 
 ## Installation
 
-1. Download **`LeagueAccounts.exe`** from the [latest release](https://github.com/Tariolle/LeagueAccounts/releases/latest).
+1. Download **`LeagueAccounts.exe`** from the [latest release](https://github.com/FurkanZhlp/LeagueAccounts/releases/latest).
 2. Put it anywhere you like (for example `Documents\LeagueAccounts`) and run it. Nothing else needs to be installed.
 3. On first launch Windows SmartScreen may say *"Windows protected your PC"*, because the app is not code-signed. Click **More info → Run anyway**.
 
@@ -107,7 +107,7 @@ The switch at the top changes every rank, sort order, chart and filter between *
 
 | Setting | Description |
 |---|---|
-| Language | English, Türkçe, Deutsch, Español, Français (follows your system language by default) |
+| Language | English, Türkçe, Deutsch, Español, Français, Português (follows your system language by default) |
 | Launch when Windows starts | Opens League Accounts when you sign in to Windows; optionally **start minimized** |
 | Refresh ranks automatically | On/off and interval in minutes (default 30) |
 | Login method | *Open the Riot Client and sign in* (default) or *Type into the previous window* |
@@ -152,7 +152,7 @@ The switch at the top changes every rank, sort order, chart and filter between *
 | *Riot Client was not found* | Install the Riot Client, or switch **Settings → Login** to *Type into the previous window*. |
 | *The Riot Client login screen didn't appear in time* | Open the Riot Client once manually (it may be updating), then try again. |
 | Ranks show **Unavailable** | Check that the Riot ID (`Name#TAG`) and region are correct, then use **Refresh ranks**. OP.GG may also be rate-limiting; try again later. |
-| Something else | Open **Log folder** in the sidebar and attach the newest `.log` file to an [issue](https://github.com/Tariolle/LeagueAccounts/issues). Logs contain no account data. |
+| Something else | Open **Log folder** in the sidebar and attach the newest `.log` file to an [issue](https://github.com/FurkanZhlp/LeagueAccounts/issues). Logs contain no account data. |
 
 ## Building from source
 
@@ -172,9 +172,9 @@ npx tauri build --no-bundle  # build target/release/LeagueAccounts.exe
 | `src-tauri/` | Tauri shell: commands, auto refresh scheduler, settings, update checker |
 | `ui/` | Web interface (TypeScript + CSS); translations live in `ui/src/i18n.ts` |
 
-## License and disclaimer
+## Credits and disclaimer
 
-League Accounts is released under the [MIT License](LICENSE).
+League Accounts builds on [LeagueAccounts](https://github.com/Tariolle/LeagueAccounts) by Florent Tariolle, licensed under the [MIT License](LICENSE). This fork keeps the LP history tracking that the upstream project leaves out.
 
 League Accounts isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games, League of Legends and Teamfight Tactics are trademarks or registered trademarks of Riot Games, Inc. Rank data is provided by OP.GG; this project is not affiliated with OP.GG.
 
