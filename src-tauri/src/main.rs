@@ -376,8 +376,9 @@ fn set_clipboard(text: &str) -> CommandResult<()> {
 #[tauri::command]
 fn copy_account_id(state: AppState<'_>, key: Key) -> CommandResult<()> {
     let account = find_account(&state, key)?;
+    set_clipboard(&account.account_id)?;
     state.clipboard_generation.fetch_add(1, Ordering::SeqCst);
-    set_clipboard(&account.account_id)
+    Ok(())
 }
 
 #[tauri::command]
@@ -434,7 +435,6 @@ async fn login(
     let account = find_account(&state, key)?;
     let password = password_for(&account);
     let settings = state.settings.lock().map(|s| s.clone()).unwrap_or_default();
-    state.clipboard_generation.fetch_add(1, Ordering::SeqCst);
     state.login_cancel.store(false, Ordering::SeqCst);
     let shared = Arc::clone(&state);
     let result = tauri::async_runtime::spawn_blocking(move || {
