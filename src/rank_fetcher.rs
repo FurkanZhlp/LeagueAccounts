@@ -157,36 +157,29 @@ impl RankFetcher {
     }
 
     pub fn parse_last_season_from_opgg(&self, decoded_payload: &str) -> (String, String) {
-        let history = Regex::new(
-            r#"(?s)"season":"(?P<season>[^"]+)","rank_entries":\{"high_rank_info":\{"tier":"(?P<high_tier>[^"]*)","lp":(?P<high_lp>null|"[^"]*").*?\},"rank_info":\{"tier":"(?P<rank_tier>[^"]*)","lp":(?P<rank_lp>null|"[^"]*")"#,
-        )
-        .expect("valid history regex");
+        let history = Regex::new(r#""rank_entries"\s*:\s*"#).expect("valid history regex");
 
-        for captures in history.captures_iter(decoded_payload) {
-            let high_rank = self.format_history_rank(
-                captures
-                    .name("high_tier")
-                    .map(|value| value.as_str())
-                    .unwrap_or_default(),
-                &self.clean_lp_value(
-                    captures
-                        .name("high_lp")
-                        .map(|value| value.as_str())
-                        .unwrap_or_default(),
-                ),
-            );
-            let finished_rank = self.format_history_rank(
-                captures
-                    .name("rank_tier")
-                    .map(|value| value.as_str())
-                    .unwrap_or_default(),
-                &self.clean_lp_value(
-                    captures
-                        .name("rank_lp")
-                        .map(|value| value.as_str())
-                        .unwrap_or_default(),
-                ),
-            );
+        for entry in history.find_iter(decoded_payload) {
+            // Parse one complete season object from the surrounding React payload.
+            // Field order and additional rank metadata must not affect extraction.
+            let Some(Ok(entries)) =
+                serde_json::Deserializer::from_str(&decoded_payload[entry.end()..])
+                    .into_iter::<serde_json::Value>()
+                    .next()
+            else {
+                continue;
+            };
+            let format_rank = |key: &str| {
+                let tier = entries[key]["tier"].as_str().unwrap_or_default();
+                let lp = match &entries[key]["lp"] {
+                    serde_json::Value::String(value) => value.clone(),
+                    serde_json::Value::Number(value) => value.to_string(),
+                    _ => String::new(),
+                };
+                self.format_history_rank(tier, &self.clean_lp_value(&lp))
+            };
+            let high_rank = format_rank("high_rank_info");
+            let finished_rank = format_rank("rank_info");
             if !high_rank.is_empty() || !finished_rank.is_empty() {
                 return (
                     if high_rank.is_empty() {

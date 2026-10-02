@@ -55,3 +55,24 @@ fn history_retains_multiline_matching() {
         ("Platinum IV 25LP".into(), "Gold IV 10LP".into())
     );
 }
+
+#[test]
+fn history_parses_current_opgg_rank_fields() {
+    let payload = r#""season":"S2025 ","rank_entries":{"high_rank_info":{"tier":"challenger","value":"CHALLENGER","division":1,"lp":"1,255","tier_image_url":"","tier_mini_image_url":""},"rank_info":{"tier":"master","value":"MASTER","division":1,"lp":"285","tier_image_url":"","tier_mini_image_url":""}}"#;
+    assert_eq!(
+        RankFetcher::new().parse_last_season_from_opgg(payload),
+        ("Challenger 1255LP".into(), "Master 285LP".into())
+    );
+}
+
+#[test]
+fn history_parses_reordered_fields_and_numeric_lp() {
+    let payload = r#""season":"S2025","rank_entries": {
+        "rank_info": {"lp":0,"division":4,"value":"GOLD","tier":"gold 4"},
+        "high_rank_info": {"lp":25,"division":4,"value":"PLATINUM","tier":"platinum 4"}
+    }"#;
+    assert_eq!(
+        RankFetcher::new().parse_last_season_from_opgg(payload),
+        ("Platinum IV 25LP".into(), "Gold IV 0LP".into())
+    );
+}
