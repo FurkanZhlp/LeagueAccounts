@@ -326,18 +326,26 @@ impl LocalApi {
         info["username"].as_str().map(str::to_owned)
     }
 
-    fn sign_out(&self) -> bool {
+    fn sign_out(&self, cancel: &AtomicBool) -> Result<(), LoginError> {
+        check_cancelled(cancel)?;
         if !self
             .functions()
             .is_some_and(|functions| functions.contains("DeleteRsoAuthV1Session"))
         {
-            return false;
+            return Err(LoginError::SignOutFailed);
         }
-        self.client
+        check_cancelled(cancel)?;
+        let sent = self
+            .client
             .delete(format!("{}/rso-auth/v1/session", self.base))
             .basic_auth("riot", Some(&self.password))
             .send()
-            .is_ok_and(|response| response.status().is_success())
+            .is_ok_and(|response| response.status().is_success());
+        if sent {
+            Ok(())
+        } else {
+            Err(LoginError::SignOutFailed)
+        }
     }
 }
 
@@ -523,6 +531,7 @@ pub fn login(
         // The lockfile is rewritten when the client restarts; re-read it.
         let api = LocalApi::read();
         let session = api.as_ref().map_or(Session::Unknown, LocalApi::session);
+        check_cancelled(cancel)?;
         if session != Session::SignedOut {
             signed_out_since = None;
         }
@@ -539,9 +548,7 @@ pub fn login(
             (Session::SignedIn, api) => match sign_out_sent {
                 None => {
                     report(LoginStep::SignOut, progress);
-                    if !api.is_some_and(|api| api.sign_out()) {
-                        return Err(LoginError::SignOutFailed);
-                    }
+                    api.ok_or(LoginError::SignOutFailed)?.sign_out(cancel)?;
                     sign_out_sent = Some(Instant::now());
                 }
                 Some(sent) if sent.elapsed() > Duration::from_secs(15) => {
@@ -717,6 +724,48 @@ mod windows {
 mod tests {
     use super::*;
     use std::cell::Cell;
+
+    #[test]
+    fn cancellation_during_endpoint_discovery_prevents_sign_out() {
+        use std::io::{BufRead, Write};
+        use std::sync::Arc;
+
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let cancel = Arc::new(AtomicBool::new(false));
+        let server_cancel = Arc::clone(&cancel);
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            let mut reader = std::io::BufReader::new(&mut stream);
+            let mut line = String::new();
+            reader.read_line(&mut line).unwrap();
+            assert!(line.starts_with("GET /help "));
+            loop {
+                line.clear();
+                assert!(reader.read_line(&mut line).unwrap() > 0);
+                if line == "\r\n" {
+                    break;
+                }
+            }
+            server_cancel.store(true, Ordering::SeqCst);
+            let body = r#"{"functions":{"DeleteRsoAuthV1Session":{}}}"#;
+            write!(stream, "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
+        });
+        let api = LocalApi {
+            base: format!("http://{address}"),
+            password: "test".into(),
+            client: reqwest::blocking::Client::builder()
+                .no_proxy()
+                .timeout(Duration::from_secs(5))
+                .build()
+                .unwrap(),
+        };
+        assert_eq!(api.sign_out(&cancel), Err(LoginError::Cancelled));
+        server.join().unwrap();
+    }
 
     #[test]
     fn cancelled_close_does_not_touch_processes() {
