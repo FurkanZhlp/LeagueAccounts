@@ -124,9 +124,6 @@ const en = {
   "delete.hint": "The account is removed from the list and its saved password from Windows Credential Manager. This can't be undone.",
   "delete.confirm": "Delete",
 
-  "menu.login": "Log in",
-  "menu.copyId": "Copy account ID",
-  "menu.copyPassword": "Copy password",
   "menu.opgg": "OP.GG profile",
   "menu.opggTft": "OP.GG TFT profile",
   "menu.edit": "Edit",
@@ -169,7 +166,6 @@ const en = {
   "sc.dblclick": "Double-click",
   "sc.dblclickText": "Edit account",
   "sc.rightclick": "Right-click",
-  "sc.rightclickText": "All actions",
 
   "side.settings": "Settings",
   "menu.chart": "LP history",
@@ -421,9 +417,6 @@ const tr: Dict = {
   "delete.hint": "Hesap listeden, kayıtlı şifresi de Windows Kimlik Bilgisi Yöneticisi'nden silinir. Bu işlem geri alınamaz.",
   "delete.confirm": "Sil",
 
-  "menu.login": "Giriş yap",
-  "menu.copyId": "Hesap ID kopyala",
-  "menu.copyPassword": "Şifre kopyala",
   "menu.opgg": "OP.GG profili",
   "menu.opggTft": "OP.GG TFT profili",
   "menu.edit": "Düzenle",
@@ -466,7 +459,6 @@ const tr: Dict = {
   "sc.dblclick": "Çift tık",
   "sc.dblclickText": "Hesabı düzenle",
   "sc.rightclick": "Sağ tık",
-  "sc.rightclickText": "Tüm işlemler",
 
   "side.settings": "Ayarlar",
   "menu.chart": "LP geçmişi",
@@ -715,9 +707,6 @@ const de: Dict = {
   "delete.hint": "Das Konto wird aus der Liste und das gespeicherte Passwort aus der Windows-Anmeldeinformationsverwaltung entfernt. Dies kann nicht rückgängig gemacht werden.",
   "delete.confirm": "Löschen",
 
-  "menu.login": "Anmelden",
-  "menu.copyId": "Konto-ID kopieren",
-  "menu.copyPassword": "Passwort kopieren",
   "menu.opgg": "OP.GG-Profil",
   "menu.opggTft": "OP.GG-TFT-Profil",
   "menu.edit": "Bearbeiten",
@@ -760,7 +749,6 @@ const de: Dict = {
   "sc.dblclick": "Doppelklick",
   "sc.dblclickText": "Konto bearbeiten",
   "sc.rightclick": "Rechtsklick",
-  "sc.rightclickText": "Alle Aktionen",
 
   "side.settings": "Einstellungen",
   "menu.chart": "LP-Verlauf",
@@ -1009,9 +997,6 @@ const es: Dict = {
   "delete.hint": "La cuenta se quita de la lista y su contraseña guardada del Administrador de credenciales de Windows. No se puede deshacer.",
   "delete.confirm": "Eliminar",
 
-  "menu.login": "Iniciar sesión",
-  "menu.copyId": "Copiar ID de cuenta",
-  "menu.copyPassword": "Copiar contraseña",
   "menu.opgg": "Perfil de OP.GG",
   "menu.opggTft": "Perfil TFT de OP.GG",
   "menu.edit": "Editar",
@@ -1054,7 +1039,6 @@ const es: Dict = {
   "sc.dblclick": "Doble clic",
   "sc.dblclickText": "Editar cuenta",
   "sc.rightclick": "Clic derecho",
-  "sc.rightclickText": "Todas las acciones",
 
   "side.settings": "Ajustes",
   "menu.chart": "Historial de LP",
@@ -1303,9 +1287,6 @@ const fr: Dict = {
   "delete.hint": "Le compte est retiré de la liste et son mot de passe du Gestionnaire d'identification Windows. Action irréversible.",
   "delete.confirm": "Supprimer",
 
-  "menu.login": "Se connecter",
-  "menu.copyId": "Copier l'ID de compte",
-  "menu.copyPassword": "Copier le mot de passe",
   "menu.opgg": "Profil OP.GG",
   "menu.opggTft": "Profil TFT OP.GG",
   "menu.edit": "Modifier",
@@ -1348,7 +1329,6 @@ const fr: Dict = {
   "sc.dblclick": "Double-clic",
   "sc.dblclickText": "Modifier le compte",
   "sc.rightclick": "Clic droit",
-  "sc.rightclickText": "Toutes les actions",
 
   "side.settings": "Paramètres",
   "menu.chart": "Historique des LP",

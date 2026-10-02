@@ -540,10 +540,6 @@ async function deleteAccount(account: AccountView): Promise<void> {
 function openMenu(account: AccountView, x: number, y: number): void {
   select(keyId(keyOf(account)));
   contextMenu(x, y, [
-    { label: t("menu.login"), icon: "login", hint: "Ctrl⇧V", run: () => void login(account) },
-    { label: t("menu.copyId"), icon: "copy", hint: "Ctrl C", run: () => void copyId(account) },
-    { label: t("menu.copyPassword"), icon: "key", hint: "Ctrl C ×2", run: () => void copyPassword(account) },
-    "sep",
     {
       label: t(state.mode === "lol" ? "menu.opgg" : "menu.opggTft"),
       icon: "external-link",
@@ -1029,7 +1025,7 @@ function showShortcuts(): void {
     ["Ctrl + 1 / 2", t("sc.mode")],
     ["Ctrl + ,", t("sc.settings")],
     [t("sc.dblclick"), t("sc.dblclickText")],
-    [t("sc.rightclick"), t("sc.rightclickText")],
+    [t("sc.rightclick"), t("card.more")],
   ];
   void modal({
     title: t("shortcuts.title"),
