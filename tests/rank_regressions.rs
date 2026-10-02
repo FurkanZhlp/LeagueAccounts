@@ -2,6 +2,43 @@ use leagueaccounts::rank_fetcher::RankFetcher;
 use scraper::Html;
 
 #[test]
+fn missing_riot_id_does_not_attempt_a_profile_lookup() {
+    let account = leagueaccounts::models::Account {
+        name: "   ".into(),
+        ..Default::default()
+    };
+    assert_eq!(
+        RankFetcher::default().fetch_rank(&account),
+        leagueaccounts::models::RankInfo::unranked()
+    );
+}
+
+#[test]
+fn missing_id_warning_survives_a_network_failure_and_clears_after_success() {
+    use leagueaccounts::models::{Account, RankInfo};
+    let mut account = Account {
+        name: "Old Name#TAG".into(),
+        ..Account::default()
+    };
+    RankInfo {
+        riot_id_not_found: Some(true),
+        ..RankInfo::error()
+    }
+    .apply_to(&mut account);
+    assert!(account.riot_id_not_found);
+    let json = serde_json::to_string(&account).unwrap();
+    account = serde_json::from_str(&json).unwrap();
+    RankInfo::error().apply_to(&mut account);
+    assert!(account.riot_id_not_found);
+    RankInfo {
+        riot_id_not_found: Some(false),
+        ..RankInfo::unranked()
+    }
+    .apply_to(&mut account);
+    assert!(!account.riot_id_not_found);
+}
+
+#[test]
 fn original_multiline_python_level_fixture_still_parses() {
     let html = r#"
         <html>
@@ -74,5 +111,32 @@ fn history_parses_reordered_fields_and_numeric_lp() {
     assert_eq!(
         RankFetcher::new().parse_last_season_from_opgg(payload),
         ("Platinum IV 25LP".into(), "Gold IV 0LP".into())
+    );
+}
+
+#[test]
+fn tft_parses_current_set_and_previous_set() {
+    let payload = r#"{"seasons":[{"set":18,"setName":"TFTSet18"}],"entry":{"RANKED_TFT":{"splitNumber":18,"tftSetCoreName":"TFTSet18","queueType":"RANKED_TFT","tier":"DIAMOND","rank":"II","leaguePoints":57}},"matchStat":{},"previous":[{"setName":"TFTSet17","entry":{"RANKED_TFT":{"splitNumber":17,"tftSetCoreName":"TFTSet17","tier":"PLATINUM","rank":"I","leaguePoints":12}}},{"setName":"TFTSet16","entry":{"RANKED_TFT":{"tier":"GOLD","rank":"IV","leaguePoints":0}}}]}"#;
+    let rank = RankFetcher::default().parse_tft_from_opgg(payload);
+    assert_eq!(rank.tier, "Diamond");
+    assert_eq!(rank.division, "II");
+    assert_eq!(rank.lp, "57");
+    assert_eq!(rank.last_set, "Platinum I");
+}
+
+#[test]
+fn tft_unranked_current_set_ignores_other_queues() {
+    let payload = r#"{"entry":{"RANKED_TFT_DOUBLE_UP":{"tier":"SILVER","rank":"III","leaguePoints":21}},"previous":[{"setName":"TFTSet17","entry":{}}]}"#;
+    let rank = RankFetcher::default().parse_tft_from_opgg(payload);
+    assert_eq!(rank.tier, "Unranked");
+    assert_eq!(rank.last_set, "Unranked");
+}
+
+#[test]
+fn tft_url_uses_the_tft_profile_path() {
+    let fetcher = RankFetcher::default();
+    assert_eq!(
+        fetcher.build_opgg_tft_url("euw", "Hide on bush#KR1"),
+        "https://op.gg/tft/summoners/euw/Hide%20on%20bush-KR1"
     );
 }

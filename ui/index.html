@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en" data-mode="lol">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>League Accounts</title>
+  </head>
+  <body>
+    <div class="backdrop" aria-hidden="true">
+      <div class="orb orb-a"></div>
+      <div class="orb orb-b"></div>
+      <div class="orb orb-c"></div>
+      <div class="grain"></div>
+    </div>
+
+    <header class="titlebar" data-tauri-drag-region>
+      <div class="brand" data-tauri-drag-region>
+        <img src="/icon.png" alt="" class="brand-icon" />
+        <span class="brand-name" data-tauri-drag-region>League Accounts</span>
+      </div>
+      <div class="mode-switch" role="tablist">
+        <span class="mode-pill" aria-hidden="true"></span>
+        <button role="tab" data-mode="lol" class="mode-btn" data-i18n="mode.lol"></button>
+        <button role="tab" data-mode="tft" class="mode-btn" data-i18n="mode.tft"></button>
+      </div>
+      <div class="window-controls">
+        <button class="lang-btn" id="lang" data-i18n-title="lang.label" data-i18n-aria="lang.label">
+          <span data-icon="languages"></span>
+        </button>
+        <button class="win-btn" data-win="minimize" data-i18n-title="win.minimize" data-i18n-aria="win.minimize"></button>
+        <button class="win-btn" data-win="maximize" data-i18n-title="win.maximize" data-i18n-aria="win.maximize"></button>
+        <button class="win-btn win-close" data-win="close" data-i18n-title="win.close" data-i18n-aria="win.close"></button>
+      </div>
+    </header>
+
+    <div class="shell">
+      <aside class="sidebar">
+        <button class="btn btn-primary btn-block" id="open-add">
+          <span data-icon="plus"></span> <span data-i18n="side.add"></span>
+          <kbd>Ctrl N</kbd>
+        </button>
+
+        <section class="side-section">
+          <h3 class="side-title" data-i18n="side.distribution"></h3>
+          <div id="distribution" class="distribution"></div>
+        </section>
+
+        <button class="schedule" id="schedule" data-i18n-title="refresh.idle" data-i18n-aria="refresh.idle">
+          <span class="schedule-ring"><span data-icon="refresh-cw"></span></span>
+          <span class="schedule-body">
+            <span class="schedule-label" data-i18n="schedule.label"></span>
+            <span class="schedule-text"></span>
+          </span>
+        </button>
+
+        <section class="side-section side-bottom">
+          <button class="side-link" data-action="import"><span data-icon="download"></span> <span data-i18n="side.import"></span></button>
+          <button class="side-link" data-action="export"><span data-icon="upload"></span> <span data-i18n="side.export"></span></button>
+          <button class="side-link" data-action="logs"><span data-icon="folder-open"></span> <span data-i18n="side.logs"></span></button>
+          <button class="side-link" data-action="settings"><span data-icon="settings"></span> <span data-i18n="side.settings"></span></button>
+          <button class="side-link" data-action="shortcuts"><span data-icon="keyboard"></span> <span data-i18n="side.shortcuts"></span></button>
+          <div class="version" id="version"></div>
+        </section>
+      </aside>
+
+      <main class="main" data-i18n-aria="page.title">
+        <div class="toolbar">
+          <label class="search">
+            <span data-icon="search"></span>
+            <input id="search" type="text" data-i18n-ph="toolbar.search" autocomplete="off" spellcheck="false" />
+            <kbd>Ctrl F</kbd>
+          </label>
+          <div class="select-wrap">
+            <select id="region-filter" data-i18n-aria="sort.region"></select>
+          </div>
+          <div class="select-wrap" id="friend-wrap" data-i18n-title="toolbar.friendTitle">
+            <span class="select-label" data-i18n="toolbar.friend"></span>
+            <select id="friend-tier" data-i18n-aria="toolbar.friend"></select>
+            <select id="friend-division" data-i18n-aria="toolbar.friend"></select>
+          </div>
+          <div class="select-wrap">
+            <span class="select-label" data-i18n="toolbar.sort"></span>
+            <select id="sort" data-i18n-aria="toolbar.sort">
+              <option value="rank" data-i18n="sort.rank"></option>
+              <option value="name" data-i18n="sort.name"></option>
+              <option value="level" data-i18n="sort.level"></option>
+              <option value="region" data-i18n="sort.region"></option>
+            </select>
+          </div>
+          <div class="view-toggle" role="tablist">
+            <button data-view="grid" data-i18n-title="view.grid"><span data-icon="layout-grid"></span></button>
+            <button data-view="list" data-i18n-title="view.list"><span data-icon="list"></span></button>
+          </div>
+        </div>
+
+        <div id="accounts" class="accounts grid"></div>
+        <div id="empty" class="empty" hidden></div>
+      </main>
+    </div>
+
+    <div id="drawer-root"></div>
+    <div id="modal-root"></div>
+    <div id="menu-root"></div>
+    <div id="toasts" class="toasts" aria-live="polite"></div>
+
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs id="emblem-defs"></defs>
+    </svg>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

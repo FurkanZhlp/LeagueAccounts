@@ -1,6 +1,6 @@
 use crate::credentials;
 use crate::logging::{self, Event, Reason};
-use crate::models::{Account, AccountKey, RankInfo};
+use crate::models::{Account, AccountKey, RankInfo, TftRank};
 use crate::rank_fetcher::RankProvider;
 use crate::utils::{accounts_file, region_display, sort_accounts};
 use serde::{Deserialize, Serialize};
@@ -105,10 +105,15 @@ impl AccountManager {
             .find(|account| account.key() == *key)
     }
 
-    pub fn apply_rank_info(&mut self, key: &AccountKey, info: &RankInfo) {
-        if let Some(account) = self.account_mut(key) {
+    pub fn apply_rank_info(&mut self, fetched: &Account, info: &RankInfo) -> bool {
+        if let Some(account) = self
+            .account_mut(&fetched.key())
+            .filter(|account| account.name == fetched.name)
+        {
             info.apply_to(account);
+            return true;
         }
+        false
     }
 
     /// Fetch all ranks with at most four concurrent provider calls.
@@ -170,6 +175,7 @@ impl AccountManager {
             let account = Account {
                 account_id: account_id.clone(),
                 name: item.name,
+                riot_id_not_found: item.riot_id_not_found,
                 region: region.clone(),
                 region_display: if item.region_display.is_empty() {
                     region_display(&region)
@@ -196,6 +202,7 @@ impl AccountManager {
                 } else {
                     item.finished_last_season
                 },
+                tft: item.tft,
             };
             if !account.password.is_empty() {
                 let _ = credentials::set_password(
@@ -261,6 +268,7 @@ fn run_rank_jobs(
 struct ExportAccount {
     account_id: String,
     name: String,
+    riot_id_not_found: bool,
     region: String,
     region_display: String,
     password: String,
@@ -271,6 +279,7 @@ struct ExportAccount {
     level: String,
     reached_last_season: String,
     finished_last_season: String,
+    tft: TftRank,
 }
 
 impl From<&Account> for ExportAccount {
@@ -278,6 +287,7 @@ impl From<&Account> for ExportAccount {
         Self {
             account_id: account.account_id.clone(),
             name: account.name.clone(),
+            riot_id_not_found: account.riot_id_not_found,
             region: account.region.clone(),
             region_display: account.region_display.clone(),
             password: account.password.clone(),
@@ -288,6 +298,7 @@ impl From<&Account> for ExportAccount {
             level: account.level.clone(),
             reached_last_season: account.reached_last_season.clone(),
             finished_last_season: account.finished_last_season.clone(),
+            tft: account.tft.clone(),
         }
     }
 }
@@ -299,6 +310,8 @@ struct ImportAccount {
     #[serde(default)]
     name: String,
     #[serde(default)]
+    riot_id_not_found: bool,
+    #[serde(default)]
     region: String,
     #[serde(default)]
     region_display: String,
@@ -318,6 +331,8 @@ struct ImportAccount {
     reached_last_season: String,
     #[serde(default)]
     finished_last_season: String,
+    #[serde(default)]
+    tft: TftRank,
 }
 
 #[cfg(test)]
@@ -338,14 +353,44 @@ mod tests {
             thread::sleep(Duration::from_millis(20));
             self.active.fetch_sub(1, Ordering::SeqCst);
             RankInfo {
+                riot_id_not_found: Some(false),
                 tier: "Gold".into(),
                 division: "II".into(),
                 lp: "50".into(),
                 level: "100".into(),
                 reached_last_season: "Platinum IV".into(),
                 finished_last_season: "Gold I".into(),
+                tft: None,
             }
         }
+    }
+
+    #[test]
+    fn a_lookup_for_an_old_riot_id_cannot_overwrite_the_edited_account() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut manager = AccountManager::with_path(
+            directory.path().join("accounts.json"),
+            Arc::new(crate::rank_fetcher::RankFetcher::default()),
+        );
+        let fetched = Account {
+            account_id: "user".into(),
+            name: "Old Name#TAG".into(),
+            region: "euw".into(),
+            ..Account::default()
+        };
+        manager.accounts.push(fetched.clone());
+        manager.accounts[0].name.clear();
+        let info = RankInfo {
+            tier: "Diamond".into(),
+            ..RankInfo::default()
+        };
+        assert!(!manager.apply_rank_info(&fetched, &info));
+        assert_eq!(manager.accounts[0].tier, fetched.tier);
+        manager.accounts[0].name = "New Name#TAG".into();
+        assert!(!manager.apply_rank_info(&fetched, &info));
+        let current = manager.accounts[0].clone();
+        assert!(manager.apply_rank_info(&current, &info));
+        assert_eq!(manager.accounts[0].tier, "Diamond");
     }
 
     #[test]

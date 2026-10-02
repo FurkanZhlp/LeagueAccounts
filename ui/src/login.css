@@ -1,0 +1,299 @@
+/* Full-screen login progress, League-close warnings and the update banner. */
+
+.login-overlay {
+  position: fixed;
+  inset: var(--titlebar) 0 0 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background:
+    radial-gradient(600px 420px at 50% 38%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 70%),
+    rgba(4, 6, 11, 0.92);
+  backdrop-filter: blur(14px);
+  animation: fade-in 0.35s ease both;
+}
+.login-overlay.login-out {
+  animation: fade-out 0.35s ease forwards;
+}
+.login-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(460px, calc(100% - 40px));
+  animation: rise 0.6s var(--ease) both;
+}
+
+.login-orbit {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 220px;
+  height: 220px;
+  margin-bottom: 18px;
+}
+.login-orbit .ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid transparent;
+}
+.ring-1 {
+  border-top-color: var(--accent) !important;
+  border-right-color: color-mix(in srgb, var(--accent) 30%, transparent) !important;
+  animation: spin 1.6s linear infinite;
+}
+.ring-2 {
+  inset: 18px !important;
+  border-bottom-color: var(--accent-2) !important;
+  border-left-color: color-mix(in srgb, var(--accent-2) 30%, transparent) !important;
+  animation: spin 2.4s linear infinite reverse;
+}
+.ring-3 {
+  inset: 36px !important;
+  border-color: rgba(255, 255, 255, 0.06) !important;
+  box-shadow: 0 0 60px -10px color-mix(in srgb, var(--accent) 60%, transparent);
+  animation: breathe 2.4s ease-in-out infinite;
+}
+.login-emblem {
+  filter: drop-shadow(0 8px 30px color-mix(in srgb, var(--accent) 50%, transparent));
+  animation: float 3.2s ease-in-out infinite;
+}
+@keyframes breathe {
+  50% {
+    transform: scale(1.06);
+    opacity: 0.7;
+  }
+}
+
+.login-title {
+  margin: 0;
+  font-family: "Cinzel", serif;
+  font-weight: 600;
+  font-size: 26px;
+  letter-spacing: 0.06em;
+  text-align: center;
+}
+.login-account {
+  margin: 6px 0 18px;
+  color: var(--muted);
+  font-weight: 500;
+}
+.login-progress {
+  width: 100%;
+  height: 4px;
+  margin-bottom: 18px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+}
+.login-progress span {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: var(--accent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 70%, transparent);
+  transition: width 0.6s var(--ease);
+}
+
+.login-steps {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.login-steps li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  color: var(--faint);
+  font-weight: 500;
+  transition:
+    color 0.3s,
+    background 0.3s,
+    opacity 0.3s;
+  animation: rise 0.45s var(--ease) both;
+  animation-delay: calc(var(--i) * 60ms + 0.15s);
+}
+.step-icon {
+  flex: none;
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.18);
+  transition:
+    background 0.3s,
+    border-color 0.3s;
+}
+.login-steps li.active {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.login-steps li.active .step-icon {
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+  border-top-color: var(--accent);
+  animation: spin 0.8s linear infinite;
+}
+.login-steps li.done {
+  color: var(--muted);
+}
+.login-steps li.done .step-icon {
+  border-color: transparent;
+  background: var(--success);
+  color: #06210f;
+  animation: pop 0.4s var(--spring);
+}
+.login-steps li.skipped {
+  opacity: 0.4;
+}
+.login-steps li.skipped .step-label {
+  text-decoration: line-through;
+}
+.login-steps li.skipped .step-icon {
+  border-style: dashed;
+}
+.login-steps li.error {
+  color: #ff8a8a;
+  background: rgba(240, 82, 82, 0.1);
+}
+.login-steps li.error .step-icon {
+  border-color: transparent;
+  background: var(--danger);
+  color: #fff;
+}
+@keyframes pop {
+  from {
+    transform: scale(0.4);
+  }
+}
+
+.login-message {
+  margin: 16px 0 0;
+  text-align: center;
+  color: var(--muted);
+  line-height: 1.55;
+}
+.login-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+.login-actions [hidden] {
+  display: none;
+}
+
+.login-overlay.is-success .ring-1,
+.login-overlay.is-success .ring-2 {
+  animation-duration: 0.6s;
+  border-color: color-mix(in srgb, var(--success) 70%, transparent) !important;
+}
+.login-overlay.is-success .login-emblem {
+  animation: success-burst 0.8s var(--spring) both;
+}
+.login-overlay.is-success .login-title {
+  color: #86efac;
+}
+.login-overlay.is-error .login-orbit .ring {
+  animation-play-state: paused;
+  border-color: rgba(240, 82, 82, 0.35) !important;
+}
+.login-overlay.is-error .login-title {
+  color: #ff8a8a;
+}
+.login-overlay.is-info .ring-1,
+.login-overlay.is-info .ring-2 {
+  animation-duration: 4s;
+}
+@keyframes success-burst {
+  40% {
+    transform: scale(1.18);
+    filter: drop-shadow(0 0 40px color-mix(in srgb, var(--success) 80%, transparent));
+  }
+}
+
+/* Danger variant of the warning box (closing a running match). */
+.warning.danger {
+  color: #ff8a8a;
+  background: rgba(240, 82, 82, 0.08);
+  border-color: rgba(240, 82, 82, 0.3);
+}
+
+/* ------------------------------------------------------------------ update banner */
+
+.update-banner {
+  position: fixed;
+  left: 50%;
+  bottom: 22px;
+  z-index: 75;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 10px 10px 14px;
+  border-radius: 14px;
+  background: rgba(22, 28, 42, 0.97);
+  backdrop-filter: blur(16px);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  box-shadow:
+    0 20px 50px -14px rgba(0, 0, 0, 0.7),
+    0 0 0 4px color-mix(in srgb, var(--accent) 10%, transparent);
+  transform: translateX(-50%);
+  animation: banner-in 0.6s var(--spring) both;
+}
+.update-banner.toast-out {
+  animation: fade-out 0.3s ease forwards;
+}
+@keyframes banner-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 30px);
+  }
+}
+.update-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  animation: pulse-glow 2.4s ease-in-out infinite;
+}
+.update-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-right: 6px;
+}
+.update-body span {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.update-banner .btn {
+  height: 34px;
+}
+
+.update-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  font-size: 13px;
+}
+.update-row .btn {
+  height: 32px;
+  margin-left: auto;
+}
+.update-result {
+  color: var(--accent);
+  font-weight: 600;
+}

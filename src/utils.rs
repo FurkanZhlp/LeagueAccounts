@@ -40,6 +40,16 @@ pub fn region_from_display(display: &str) -> Option<&'static str> {
         .map(|(_, value)| *value)
 }
 
+/// Bulk input keeps the Riot ID column even when the name is unknown.
+pub fn parse_account_line(line: &str) -> Option<(&str, &str, &str)> {
+    ["---", "--"].into_iter().find_map(|separator| {
+        let mut parts = line.split(separator).map(str::trim);
+        let (account_id, name, password) = (parts.next()?, parts.next()?, parts.next()?);
+        (parts.next().is_none() && !account_id.is_empty() && !password.is_empty())
+            .then_some((account_id, name, password))
+    })
+}
+
 pub fn region_display(region: &str) -> String {
     REGION_MAP
         .iter()
@@ -91,9 +101,43 @@ pub fn accounts_file() -> std::io::Result<PathBuf> {
     Ok(app_data_dir()?.join("league_accounts.json"))
 }
 
+pub fn settings_file() -> std::io::Result<PathBuf> {
+    Ok(app_data_dir()?.join("settings.json"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bulk_input_allows_an_empty_riot_id_but_requires_credentials() {
+        for separator in ["--", "---"] {
+            assert_eq!(
+                parse_account_line(&format!(" user{separator} {separator}secret ")),
+                Some(("user", "", "secret"))
+            );
+            assert_eq!(
+                parse_account_line(&format!("user{separator}Player#TAG{separator}secret")),
+                Some(("user", "Player#TAG", "secret"))
+            );
+        }
+        assert_eq!(
+            parse_account_line("user----secret"),
+            Some(("user", "", "secret"))
+        );
+        assert_eq!(
+            parse_account_line("user------secret"),
+            Some(("user", "", "secret"))
+        );
+        for invalid in [
+            "----secret",
+            "user----",
+            "user--secret",
+            "user--name--secret--extra",
+        ] {
+            assert_eq!(parse_account_line(invalid), None);
+        }
+    }
 
     #[test]
     fn rank_sort_key_matches_python_order() {

@@ -1,0 +1,238 @@
+/* Schedule widget and settings. */
+
+/* ------------------------------------------------------------------ schedule widget */
+
+.schedule {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 11px;
+  border-radius: 12px;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line);
+  transition:
+    background 0.2s,
+    border-color 0.2s;
+}
+.schedule:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--line-2);
+}
+.schedule-ring {
+  flex: none;
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  color: var(--accent);
+  background: conic-gradient(var(--accent) calc(var(--p, 0) * 360deg), rgba(255, 255, 255, 0.07) 0);
+}
+.schedule-ring::before {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: #0d111b;
+}
+.schedule-ring > * {
+  position: relative;
+}
+.schedule.running .schedule-ring .icon {
+  animation: spin 1.4s linear infinite;
+}
+.schedule.off .schedule-ring {
+  color: var(--faint);
+  background: rgba(255, 255, 255, 0.07);
+}
+.schedule-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.schedule-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.schedule-text {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------------ settings */
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.settings-section:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.settings-section h3 {
+  margin: 4px 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.field.inline {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+}
+.field.inline > span {
+  font-size: 13.5px;
+  color: var(--text);
+  font-weight: 600;
+}
+.toggle-row,
+.radio-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 9px 10px;
+  margin: 0 -10px;
+  border-radius: 11px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.toggle-row:hover,
+.radio-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+.toggle-row.disabled,
+.interval-row.disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+.toggle-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.toggle-text strong {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.toggle-text span {
+  font-size: 12px;
+  color: var(--faint);
+}
+.toggle-row input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.switch {
+  flex: none;
+  position: relative;
+  width: 40px;
+  height: 23px;
+  border-radius: 23px;
+  background: rgba(255, 255, 255, 0.12);
+  transition: background 0.25s;
+}
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  transition: transform 0.3s var(--spring);
+}
+.toggle-row input:checked + .switch {
+  background: var(--accent);
+}
+.toggle-row input:checked + .switch::after {
+  transform: translateX(17px);
+}
+.toggle-row input:focus-visible + .switch {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+.radio-row input {
+  flex: none;
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+.interval-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0 2px;
+  transition: opacity 0.2s;
+}
+.interval-row > span {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.interval-presets {
+  display: flex;
+  gap: 4px;
+}
+.interval-presets button {
+  min-width: 38px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  transition:
+    background 0.2s,
+    color 0.2s,
+    border-color 0.2s;
+}
+.interval-presets button.active {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+}
+.interval-input {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+.interval-input input {
+  width: 72px;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: 8px;
+  border: 1px solid var(--line-2);
+  background: rgba(0, 0, 0, 0.25);
+  outline: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.interval-input input:focus {
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+}
+.interval-input span {
+  font-size: 12.5px;
+  color: var(--muted);
+}

@@ -17,3 +17,8 @@ desktop.ini
 
 # Local agent settings
 .claude/settings.local.json
+
+# Frontend
+node_modules/
+dist/
+src-tauri/gen/

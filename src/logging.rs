@@ -32,6 +32,9 @@ pub enum Event {
     CredentialDeleteFailed,
     RankClientFailed,
     RankFetchFailed,
+    TftFetchFailed,
+    SettingsSaveFailed,
+    AutoRefreshStarted,
     RankRefreshStarted,
     RankRefreshCompleted,
     RankWorkerPanicked,
@@ -58,6 +61,9 @@ impl Event {
             Self::CredentialDeleteFailed => "credential_delete_failed",
             Self::RankClientFailed => "rank_client_failed",
             Self::RankFetchFailed => "rank_fetch_failed",
+            Self::TftFetchFailed => "tft_fetch_failed",
+            Self::SettingsSaveFailed => "settings_save_failed",
+            Self::AutoRefreshStarted => "auto_refresh_started",
             Self::RankRefreshStarted => "rank_refresh_started",
             Self::RankRefreshCompleted => "rank_refresh_completed",
             Self::RankWorkerPanicked => "rank_worker_panicked",
@@ -74,7 +80,8 @@ impl Event {
             Self::SessionStarted
             | Self::SessionEnded
             | Self::RankRefreshStarted
-            | Self::RankRefreshCompleted => "INFO",
+            | Self::RankRefreshCompleted
+            | Self::AutoRefreshStarted => "INFO",
             _ => "ERROR",
         }
     }
