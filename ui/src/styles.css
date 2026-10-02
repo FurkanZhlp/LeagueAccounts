@@ -1035,10 +1035,6 @@ select option {
   font-weight: 600;
   color: var(--muted);
 }
-.history .dot {
-  opacity: 0.5;
-}
-
 .rank-block.is-pending > * {
   opacity: 0.35;
   filter: blur(1px);

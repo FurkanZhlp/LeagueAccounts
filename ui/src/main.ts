@@ -112,13 +112,8 @@ function historyLine(account: AccountView): string {
   if (state.mode === "tft") {
     return `<span>${t("card.lastSet")}</span><b>${esc(localizeRank(account.tft.lastSet))}</b>`;
   }
-  const finished = account.lol.finishedLastSeason || "N/A";
   const reached = account.lol.reachedLastSeason || "N/A";
-  const peak =
-    reached !== finished && reached !== "N/A" && reached !== "Unranked"
-      ? `<span class="dot">•</span><span>${t("card.peak")}</span><b>${esc(localizeRank(reached))}</b>`
-      : "";
-  return `<span>${t("card.lastSeason")}</span><b>${esc(localizeRank(finished))}</b>${peak}`;
+  return `<span>${t("card.lastSeason")}</span><b>${esc(localizeRank(reached))}</b>`;
 }
 
 function cardSignature(account: AccountView, pending: boolean): string {
