@@ -20,10 +20,6 @@ const en = {
   "refresh.idle": "Refresh ranks",
   "refresh.busy": "Refreshing {done}/{total}",
 
-  "stats.total": "Total accounts",
-  "stats.ranked": "Ranked",
-  "stats.best": "Highest",
-  "stats.level": "Avg. level",
 
   "toolbar.search": "Search name, tag or account ID…",
   "toolbar.allRegions": "All regions",
@@ -308,10 +304,6 @@ const tr: Dict = {
   "refresh.idle": "Rankları yenile",
   "refresh.busy": "Yenileniyor {done}/{total}",
 
-  "stats.total": "Toplam hesap",
-  "stats.ranked": "Ranklı",
-  "stats.best": "En yüksek",
-  "stats.level": "Ort. seviye",
 
   "toolbar.search": "İsim, tag veya hesap ID ara…",
   "toolbar.allRegions": "Tüm bölgeler",
@@ -593,10 +585,6 @@ const de: Dict = {
   "refresh.idle": "Ränge aktualisieren",
   "refresh.busy": "Aktualisiere {done}/{total}",
 
-  "stats.total": "Konten gesamt",
-  "stats.ranked": "Gewertet",
-  "stats.best": "Höchster Rang",
-  "stats.level": "Ø Stufe",
 
   "toolbar.search": "Name, Tag oder Konto-ID suchen…",
   "toolbar.allRegions": "Alle Regionen",
@@ -878,10 +866,6 @@ const es: Dict = {
   "refresh.idle": "Actualizar rangos",
   "refresh.busy": "Actualizando {done}/{total}",
 
-  "stats.total": "Cuentas totales",
-  "stats.ranked": "Con rango",
-  "stats.best": "Rango más alto",
-  "stats.level": "Nivel medio",
 
   "toolbar.search": "Buscar nombre, tag o ID de cuenta…",
   "toolbar.allRegions": "Todas las regiones",
@@ -1163,10 +1147,6 @@ const fr: Dict = {
   "refresh.idle": "Actualiser les rangs",
   "refresh.busy": "Actualisation {done}/{total}",
 
-  "stats.total": "Comptes au total",
-  "stats.ranked": "Classés",
-  "stats.best": "Meilleur rang",
-  "stats.level": "Niveau moyen",
 
   "toolbar.search": "Rechercher un nom, tag ou ID de compte…",
   "toolbar.allRegions": "Toutes les régions",
@@ -1448,10 +1428,6 @@ const pt: Dict = {
   "refresh.idle": "Atualizar classificações",
   "refresh.busy": "A atualizar {done}/{total}",
 
-  "stats.total": "Total de contas",
-  "stats.ranked": "Classificadas",
-  "stats.best": "Mais alta",
-  "stats.level": "Nível médio",
 
   "toolbar.search": "Pesquisar nome, tag ou ID da conta…",
   "toolbar.allRegions": "Todas as regiões",

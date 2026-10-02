@@ -46,25 +46,6 @@ export function leave(element: HTMLElement, className = "leaving"): Promise<void
   });
 }
 
-/** Animate a number from its current value to `target`. */
-export function countTo(element: HTMLElement, target: number, decimals = 0): void {
-  const start = Number.parseFloat(element.dataset.value ?? "0") || 0;
-  element.dataset.value = String(target);
-  if (reducedMotion() || start === target) {
-    element.textContent = target.toFixed(decimals);
-    return;
-  }
-  const began = performance.now();
-  const duration = 700;
-  const tick = (now: number) => {
-    const t = Math.min(1, (now - began) / duration);
-    const eased = 1 - Math.pow(1 - t, 3);
-    element.textContent = (start + (target - start) * eased).toFixed(decimals);
-    if (t < 1) requestAnimationFrame(tick);
-  };
-  requestAnimationFrame(tick);
-}
-
 // ---------------------------------------------------------------- toasts
 
 type ToastKind = "success" | "error" | "info";

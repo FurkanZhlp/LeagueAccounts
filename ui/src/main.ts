@@ -8,7 +8,7 @@ import { ApiError, api, events, keyId, keyOf, type AccountView, type Key, type R
 import { openLoginOverlay, type LoginOverlay } from "./login";
 import { deltaBadge, historySummary, recentDelta, renderHistoryChart, sparkline, type Range } from "./chart";
 import { LANGUAGES, applyStatic, errorText, lang, localizeRank, setLang, t, tierName, type Lang, type MessageKey } from "./i18n";
-import { $, closeMenu, contextMenu, countTo, esc, fragment, leave, modal, reducedMotion, toast } from "./dom";
+import { $, closeMenu, contextMenu, esc, fragment, leave, modal, reducedMotion, toast } from "./dom";
 import { hydrateIcons, icon } from "./icons";
 import {
   APEX,
@@ -249,33 +249,7 @@ function renderAccounts(): void {
   }
 }
 
-// ---------------------------------------------------------------- stats & sidebar
-
-function renderStats(): void {
-  const root = $("#stats");
-  if (!root.children.length) {
-    root.innerHTML = `
-      <div class="stat"><span class="stat-label" data-i18n="stats.total"></span><span class="stat-value" data-stat="total">0</span></div>
-      <div class="stat"><span class="stat-label" data-i18n="stats.ranked"></span><span class="stat-value" data-stat="ranked">0</span></div>
-      <div class="stat stat-best"><span class="stat-label" data-i18n="stats.best"></span><div class="stat-best-row"><span data-stat="best-emblem"></span><span class="stat-value small" data-stat="best">—</span></div></div>
-      <div class="stat"><span class="stat-label" data-i18n="stats.level"></span><span class="stat-value" data-stat="level">0</span></div>`;
-  }
-  applyStatic(root);
-  const ranks = state.accounts.map((account) => rankOf(account, state.mode));
-  countTo($('[data-stat="total"]', root), state.accounts.length);
-  countTo($('[data-stat="ranked"]', root), ranks.filter(isRanked).length);
-  const levels = state.accounts.map((account) => Number(account.level)).filter((level) => level > 0);
-  countTo($('[data-stat="level"]', root), levels.length ? Math.round(levels.reduce((a, b) => a + b, 0) / levels.length) : 0);
-  const best = ranks.filter(isRanked).sort(compareRanks)[0];
-  const bestLabel = best ? `${rankLabel(best)}${best.lp ? ` · ${best.lp} LP` : ""}` : "—";
-  const bestElement = $('[data-stat="best"]', root);
-  if (bestElement.textContent !== bestLabel || bestElement.dataset.lang !== lang()) {
-    bestElement.dataset.lang = lang();
-    bestElement.textContent = bestLabel;
-    $('[data-stat="best-emblem"]', root).innerHTML = emblem(best?.tier ?? "Unranked", 30);
-    bestElement.style.color = best ? palette(best.tier).base : "";
-  }
-}
+// ---------------------------------------------------------------- sidebar
 
 function renderDistribution(): void {
   const counts = new Map<string, number>();
@@ -321,7 +295,6 @@ function render(): void {
   renderSchedule();
   renderControls();
   renderAccounts();
-  renderStats();
   renderDistribution();
 }
 
@@ -1338,7 +1311,6 @@ async function wireEvents(): Promise<void> {
     upsert(account);
     if (state.refreshing) state.refreshDone = Math.min(state.refreshTotal, state.refreshDone + 1);
     renderAccounts();
-    renderStats();
     renderDistribution();
     renderSchedule();
   });

@@ -449,7 +449,7 @@ body.ready .shell {
 
 .main {
   overflow-y: auto;
-  padding: 26px 32px 40px;
+  padding: 0 32px 40px;
   scroll-behavior: smooth;
 }
 
@@ -561,79 +561,11 @@ body.ready .shell {
   }
 }
 
-/* ------------------------------------------------------------------ stats */
-
-.stats {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
-  margin-bottom: 20px;
-}
-.stat {
-  position: relative;
-  padding: 14px 18px;
-  border-radius: var(--radius);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.015));
-  border: 1px solid var(--line);
-  overflow: hidden;
-  animation: rise 0.6s var(--ease) both;
-}
-.stat:nth-child(2) {
-  animation-delay: 0.05s;
-}
-.stat:nth-child(3) {
-  animation-delay: 0.1s;
-}
-.stat:nth-child(4) {
-  animation-delay: 0.15s;
-}
-.stat::after {
-  content: "";
-  position: absolute;
-  inset: auto -20% -60% auto;
-  width: 140px;
-  height: 140px;
-  border-radius: 50%;
-  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 22%, transparent), transparent 70%);
-  pointer-events: none;
-}
-.stat-label {
-  display: block;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--faint);
-}
-.stat-value {
-  display: block;
-  margin-top: 6px;
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums;
-}
-.stat-value.small {
-  margin-top: 0;
-  font-size: 16px;
-  transition: color 0.4s;
-}
-.stat-best-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 6px;
-  min-height: 34px;
-}
-.stat-best-row [data-stat="best-emblem"] {
-  display: grid;
-}
-
 /* ------------------------------------------------------------------ toolbar */
 
 .toolbar {
   position: sticky;
-  top: -26px;
+  top: 0;
   z-index: 5;
   display: flex;
   flex-wrap: wrap;
@@ -1725,9 +1657,6 @@ select option {
 /* ------------------------------------------------------------------ responsive & motion */
 
 @media (max-width: 1180px) {
-  .stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
   .shell {
     grid-template-columns: 220px 1fr;
   }
