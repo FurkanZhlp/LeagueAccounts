@@ -12,6 +12,10 @@ pub const REGION_MAP: &[(&str, &str)] = &[
     ("TR", "tr"),
     ("LAN", "lan"),
     ("LAS", "las"),
+    ("ME", "me"),
+    ("SEA", "sea"),
+    ("TW", "tw"),
+    ("VN", "vn"),
 ];
 
 pub const TIER_ORDER: &[&str] = &[
