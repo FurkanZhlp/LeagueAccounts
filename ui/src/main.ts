@@ -315,15 +315,6 @@ function renderSubtitle(): void {
   $("#page-sub").textContent = parts.join(" · ");
 }
 
-function renderRefresh(): void {
-  const button = $("#refresh");
-  button.classList.toggle("is-busy", state.refreshing);
-  button.style.setProperty("--p", state.refreshTotal ? String(state.refreshDone / state.refreshTotal) : "0");
-  $(".refresh-label", button).textContent = state.refreshing
-    ? t("refresh.busy", { done: state.refreshDone, total: state.refreshTotal })
-    : t("refresh.idle");
-}
-
 function renderControls(): void {
   document.documentElement.dataset.mode = state.mode;
   document.querySelectorAll<HTMLButtonElement>(".mode-btn").forEach((button) => {
@@ -341,13 +332,12 @@ function renderControls(): void {
 
 function render(): void {
   populateRegions();
-  if (state.schedule) renderSchedule();
+  renderSchedule();
   renderControls();
   renderAccounts();
   renderStats();
   renderDistribution();
   renderSubtitle();
-  renderRefresh();
 }
 
 // ---------------------------------------------------------------- actions
@@ -553,13 +543,19 @@ function openMenu(account: AccountView, x: number, y: number): void {
 }
 
 async function refreshAll(): Promise<void> {
-  if (state.refreshing) return;
-  const count = await guard(() => api.refreshRanks(), "toast.refreshFailed");
-  if (count === undefined) return;
+  if (state.refreshing || state.schedule?.running) return;
   state.refreshing = true;
-  state.refreshTotal = count;
+  state.refreshTotal = 0;
   state.refreshDone = 0;
-  renderRefresh();
+  renderSchedule();
+  const count = await guard(() => api.refreshRanks(), "toast.refreshFailed");
+  if (count === undefined) {
+    state.refreshing = false;
+    renderSchedule();
+    return;
+  }
+  state.refreshTotal = count;
+  renderSchedule();
 }
 
 // ---------------------------------------------------------------- LP history
@@ -668,15 +664,18 @@ async function checkUpdateNow(button: HTMLButtonElement, output: HTMLElement): P
 // ---------------------------------------------------------------- schedule & settings
 
 function renderSchedule(): void {
-  const root = $("#schedule");
+  const root = $<HTMLButtonElement>("#schedule");
   const schedule = state.schedule;
+  const running = Boolean(schedule?.running || state.refreshing);
   let text: string;
   let progress = 0;
-  if (!schedule || !schedule.enabled) {
+  if (running) {
+    text = state.refreshTotal
+      ? t("refresh.busy", { done: state.refreshDone, total: state.refreshTotal })
+      : t("schedule.running");
+    progress = state.refreshTotal ? state.refreshDone / state.refreshTotal : 1;
+  } else if (!schedule || !schedule.enabled) {
     text = t("schedule.off");
-  } else if (schedule.running || state.refreshing) {
-    text = t("schedule.running");
-    progress = 1;
   } else if (schedule.nextAt) {
     const remaining = schedule.nextAt - Date.now();
     const total = schedule.intervalMinutes * 60_000;
@@ -693,8 +692,10 @@ function renderSchedule(): void {
   } else {
     text = t("schedule.soon");
   }
-  root.classList.toggle("off", !schedule?.enabled);
-  root.classList.toggle("running", Boolean(schedule?.running || state.refreshing));
+  root.classList.toggle("off", !schedule?.enabled && !running);
+  root.classList.toggle("running", running);
+  root.disabled = running;
+  root.setAttribute("aria-busy", String(running));
   root.style.setProperty("--p", String(progress));
   $(".schedule-text", root).textContent = text;
 }
@@ -1118,7 +1119,7 @@ function wire(): void {
     renderAccounts();
   });
 
-  $("#refresh").addEventListener("click", () => void refreshAll());
+  $("#schedule").addEventListener("click", () => void refreshAll());
   $("#open-add").addEventListener("click", () => openAddDrawer());
   $("#lang").addEventListener("click", openLangMenu);
   document.querySelectorAll<HTMLButtonElement>("[data-action]").forEach((button) => {
@@ -1338,7 +1339,6 @@ async function wireEvents(): Promise<void> {
     state.refreshing = true;
     state.refreshTotal = total;
     state.refreshDone = 0;
-    renderRefresh();
     renderSchedule();
   });
   await events.onSchedule((schedule) => {
@@ -1356,7 +1356,7 @@ async function wireEvents(): Promise<void> {
     renderAccounts();
     renderStats();
     renderDistribution();
-    renderRefresh();
+    renderSchedule();
   });
   await events.onRefreshDone(({ error, exclusive, auto }) => {
     if (error) toast("error", t("toast.ranksSaveFailed"), describe(new ApiError(error.code, error.detail)), 5000);

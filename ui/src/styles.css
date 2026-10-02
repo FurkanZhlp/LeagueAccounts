@@ -579,32 +579,6 @@ body.ready .shell {
   transform: scale(0.92);
 }
 
-#refresh {
-  min-width: 190px;
-}
-#refresh::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  width: calc(var(--p, 0) * 100%);
-  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 10%, transparent), color-mix(in srgb, var(--accent) 30%, transparent));
-  transition: width 0.5s var(--ease);
-  opacity: 0;
-}
-#refresh.is-busy::before {
-  opacity: 1;
-}
-#refresh > * {
-  position: relative;
-}
-#refresh.is-busy .refresh-icon {
-  animation: spin 0.9s linear infinite;
-  color: var(--accent);
-}
-.refresh-label {
-  font-variant-numeric: tabular-nums;
-}
-
 @keyframes spin {
   to {
     transform: rotate(360deg);
