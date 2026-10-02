@@ -1400,6 +1400,9 @@ select option {
 .password input {
   padding-right: 44px;
 }
+.password input::-ms-reveal {
+  display: none;
+}
 .password .icon-btn {
   position: absolute;
   right: 5px;
