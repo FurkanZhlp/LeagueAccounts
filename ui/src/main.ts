@@ -400,8 +400,18 @@ async function confirmCloseLeague(account: AccountView, inGame: boolean): Promis
   return answer === "close";
 }
 
-async function login(account: AccountView, switchAccount = false, closeRunning = false): Promise<void> {
+async function login(account: AccountView): Promise<void> {
   if (loginBusy) return;
+  loginBusy = true;
+  try {
+    await runLogin(account);
+  } finally {
+    loginBusy = false;
+    activeLogin = null;
+  }
+}
+
+async function runLogin(account: AccountView, switchAccount = false, closeRunning = false): Promise<void> {
   const viaRiot = state.settings?.loginMethod !== "previous";
   const key = keyOf(account);
 
@@ -411,11 +421,10 @@ async function login(account: AccountView, switchAccount = false, closeRunning =
     if (!status) return;
     if ((status.clientOpen || status.inGame) && !status.sameAccount) {
       if (!(await confirmCloseLeague(account, status.inGame))) return;
-      return login(account, true, true);
+      return runLogin(account, true, true);
     }
   }
 
-  loginBusy = true;
   const launching = Boolean(viaRiot && state.settings?.launchGame);
   const overlay = openLoginOverlay({
     account,
@@ -446,9 +455,8 @@ async function login(account: AccountView, switchAccount = false, closeRunning =
           { label: t("login.switchConfirm"), value: "switch", kind: "primary" },
         ],
       });
-      loginBusy = false;
       activeLogin = null;
-      if (answer === "switch") await login(account, true, closeRunning);
+      if (answer === "switch") await runLogin(account, true, closeRunning);
       return;
     }
   } catch (error) {
@@ -457,15 +465,11 @@ async function login(account: AccountView, switchAccount = false, closeRunning =
     } else if (error instanceof ApiError && error.code === "league_running") {
       // The client was opened between the check and the login: ask again.
       overlay.close();
-      loginBusy = false;
       activeLogin = null;
-      return login(account, switchAccount, false);
+      return runLogin(account, switchAccount, false);
     } else {
       overlay.fail(describe(error));
     }
-  } finally {
-    loginBusy = false;
-    activeLogin = null;
   }
 }
 
