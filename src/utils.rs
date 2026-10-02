@@ -71,7 +71,7 @@ pub fn sort_accounts(accounts: &mut [crate::models::Account]) {
     accounts.sort_by_key(|account| rank_sort_key(&account.tier, &account.division, &account.lp));
 }
 
-pub fn accounts_file() -> std::io::Result<PathBuf> {
+pub fn app_data_dir() -> std::io::Result<PathBuf> {
     let base = std::env::var_os("APPDATA")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("USERPROFILE").map(PathBuf::from))
@@ -84,7 +84,11 @@ pub fn accounts_file() -> std::io::Result<PathBuf> {
         })?;
     let folder = base.join("LeagueAccounts");
     std::fs::create_dir_all(&folder)?;
-    Ok(folder.join("league_accounts.json"))
+    Ok(folder)
+}
+
+pub fn accounts_file() -> std::io::Result<PathBuf> {
+    Ok(app_data_dir()?.join("league_accounts.json"))
 }
 
 #[cfg(test)]

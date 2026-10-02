@@ -166,7 +166,12 @@ fn forms_and_filters_are_visible_with_empty_and_full_tables() {
             let _ = frame(&ctx, &mut app, size, vec![]);
         }
         let output = frame(&ctx, &mut app, size, vec![]);
-        for text in ["Add New Account", "Multi Add", "Friend Elo:"] {
+        for text in [
+            "Add New Account",
+            "Multi Add",
+            "Friend Elo:",
+            "Login (auto-type)",
+        ] {
             assert!(
                 text_is_visible(&output, text, viewport),
                 "{text} hidden with {count} accounts"
@@ -186,6 +191,7 @@ fn small_windows_keep_filters_visible_and_sidebar_actions_reachable() {
     }
     let output = frame(&ctx, &mut app, size, vec![]);
     assert!(text_is_visible(&output, "Friend Elo:", viewport));
+    assert!(text_is_visible(&output, "Login (auto-type)", viewport));
     for _ in 0..10 {
         let _ = frame(
             &ctx,
@@ -205,4 +211,5 @@ fn small_windows_keep_filters_visible_and_sidebar_actions_reachable() {
     let output = frame(&ctx, &mut app, size, vec![]);
     assert!(text_is_visible(&output, "Friend Elo:", viewport));
     assert!(text_is_visible(&output, "Shortcuts Help", viewport));
+    assert!(text_is_visible(&output, "Open Logs Folder", viewport));
 }

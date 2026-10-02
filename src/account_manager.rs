@@ -1,4 +1,5 @@
 use crate::credentials;
+use crate::logging::{self, Event, Reason};
 use crate::models::{Account, AccountKey, RankInfo};
 use crate::rank_fetcher::RankProvider;
 use crate::utils::{accounts_file, region_display, sort_accounts};
@@ -23,7 +24,9 @@ impl AccountManager {
     pub fn new(rank_fetcher: Arc<dyn RankProvider>) -> ManagerResult<Self> {
         Ok(Self {
             accounts: Vec::new(),
-            accounts_file: accounts_file()?,
+            accounts_file: accounts_file().inspect_err(|error| {
+                logging::record(Event::DataDirectoryFailed, Reason::from_error(error));
+            })?,
             rank_fetcher,
         })
     }
@@ -41,8 +44,12 @@ impl AccountManager {
         if !self.accounts_file.exists() {
             return Ok(());
         }
-        let contents = std::fs::read_to_string(&self.accounts_file)?;
-        let mut loaded: Vec<Account> = serde_json::from_str(&contents)?;
+        let contents = std::fs::read_to_string(&self.accounts_file).inspect_err(|error| {
+            logging::record(Event::AccountsLoadFailed, Reason::from_error(error));
+        })?;
+        let mut loaded: Vec<Account> = serde_json::from_str(&contents).inspect_err(|error| {
+            logging::record(Event::AccountsLoadFailed, Reason::from_error(error));
+        })?;
         for account in &mut loaded {
             if account.region_display.is_empty() {
                 account.region_display = region_display(&account.region);
@@ -62,10 +69,16 @@ impl AccountManager {
 
     pub fn save_accounts(&self) -> ManagerResult<()> {
         if let Some(parent) = self.accounts_file.parent() {
-            std::fs::create_dir_all(parent)?;
+            std::fs::create_dir_all(parent).inspect_err(|error| {
+                logging::record(Event::AccountsSaveFailed, Reason::from_error(error));
+            })?;
         }
-        let json = serde_json::to_string_pretty(&self.accounts)?;
-        std::fs::write(&self.accounts_file, json)?;
+        let json = serde_json::to_string_pretty(&self.accounts).inspect_err(|error| {
+            logging::record(Event::AccountsSaveFailed, Reason::from_error(error));
+        })?;
+        std::fs::write(&self.accounts_file, json).inspect_err(|error| {
+            logging::record(Event::AccountsSaveFailed, Reason::from_error(error));
+        })?;
         Ok(())
     }
 
@@ -100,6 +113,7 @@ impl AccountManager {
 
     /// Fetch all ranks with at most four concurrent provider calls.
     pub fn refresh_ranks(&mut self) -> ManagerResult<()> {
+        logging::record(Event::RankRefreshStarted, Reason::None);
         let jobs: Vec<(usize, Account)> = self.accounts.iter().cloned().enumerate().collect();
         let results = run_rank_jobs(self.rank_fetcher.clone(), jobs);
         for (index, info) in results {
@@ -108,7 +122,9 @@ impl AccountManager {
             }
         }
         sort_accounts(&mut self.accounts);
-        self.save_accounts()
+        self.save_accounts()?;
+        logging::record(Event::RankRefreshCompleted, Reason::None);
+        Ok(())
     }
 
     /// Serialize every field, including passwords, for an explicit export.
@@ -126,12 +142,16 @@ impl AccountManager {
             }
             export.push(ExportAccount::from(&*account));
         }
-        Ok(serde_json::to_string_pretty(&export)?)
+        Ok(serde_json::to_string_pretty(&export).inspect_err(|error| {
+            logging::record(Event::ExportFailed, Reason::from_error(error));
+        })?)
     }
 
     /// Import a JSON array. Returns `(added, skipped)` like the original app.
     pub fn import_accounts(&mut self, json: &str) -> ManagerResult<(usize, usize)> {
-        let data: Vec<ImportAccount> = serde_json::from_str(json)?;
+        let data: Vec<ImportAccount> = serde_json::from_str(json).inspect_err(|error| {
+            logging::record(Event::ImportFailed, Reason::from_error(error));
+        })?;
         let mut added = 0;
         let mut skipped = 0;
         for item in data {
@@ -216,7 +236,10 @@ fn run_rank_jobs(
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 provider.fetch_rank(&account)
             }))
-            .unwrap_or_else(|_| RankInfo::error());
+            .unwrap_or_else(|_| {
+                logging::record(Event::RankWorkerPanicked, Reason::None);
+                RankInfo::error()
+            });
             if sender.send((index, result)).is_err() {
                 break;
             }
@@ -368,5 +391,49 @@ mod tests {
         });
         manager.save_accounts().unwrap();
         assert!(!std::fs::read_to_string(path).unwrap().contains("secret"));
+    }
+
+    #[test]
+    fn storage_and_import_errors_never_log_secret_input_or_paths() {
+        let directory = tempfile::tempdir().unwrap();
+        let account_id = "PRIVATE_ACCOUNT_ID_7e5f";
+        let password = "PRIVATE_PASSWORD_23b1";
+        let path = directory
+            .path()
+            .join(format!("{account_id}-{password}.json"));
+        let provider = Arc::new(SlowProvider {
+            active: AtomicUsize::new(0),
+            max_active: AtomicUsize::new(0),
+        });
+        let mut manager = AccountManager::with_path(&path, provider);
+        let json = format!(
+            r#"[{{"account_id":"{account_id}","password":"{password}","name": "{account_id}","region":"euw","tier":false}}]"#
+        );
+        // Deserialization's detailed error can echo attacker-controlled data.
+        std::fs::write(&path, &json).unwrap();
+        let logs = logging::capture(|| {
+            assert!(manager.load_accounts().is_err());
+            assert!(manager.import_accounts(&json).is_err());
+            manager.accounts.push(Account {
+                account_id: account_id.into(),
+                password: password.into(),
+                description: password.into(),
+                ..Account::default()
+            });
+            // An existing directory at the save destination makes writing fail.
+            std::fs::remove_file(&path).unwrap();
+            std::fs::create_dir(&path).unwrap();
+            assert!(manager.save_accounts().is_err());
+        });
+        for event in [
+            "accounts_load_failed",
+            "import_failed",
+            "accounts_save_failed",
+        ] {
+            assert!(logs.contains(event));
+        }
+        for secret in [account_id, password, path.to_str().unwrap(), &json] {
+            assert!(!logs.contains(secret));
+        }
     }
 }

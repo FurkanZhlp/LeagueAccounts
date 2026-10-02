@@ -15,6 +15,14 @@ focus changes, and cleanup. They do not create native windows, inject keystrokes
 read or modify the clipboard, or invoke auto-type. These tests do not replace an
 interactive check of native event delivery and the complete login sequence.
 
+Logging tests cover rotation, retention, concurrent writes, and errors whose
+Display implementation must never be called. `log_privacy.rs` initializes the
+real file logger in an isolated process with temporary app data, then exercises
+failed storage/import operations, a credential-bearing request error, and
+panics containing dummy IDs/passwords (including a sensitive thread name).
+It checks the readable log files for expected diagnostic events and verifies
+that no dummy secrets, input JSON, or user paths reached the files.
+
 ## Interactive Windows checks
 
 Use a disposable dummy account and a test window, never real credentials.
