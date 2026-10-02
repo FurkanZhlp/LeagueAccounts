@@ -1149,7 +1149,7 @@ function moveSelection(step: number, columns: boolean): void {
 function onKeyDown(event: KeyboardEvent): void {
   const target = event.target as HTMLElement;
   const typing = target.matches("input, textarea, select");
-  const overlayOpen = Boolean(document.querySelector(".overlay, .drawer-overlay"));
+  const overlayOpen = Boolean(document.querySelector(".overlay, .drawer-overlay, .login-overlay"));
   const ctrl = event.ctrlKey || event.metaKey;
   const key = event.key.toLowerCase();
 

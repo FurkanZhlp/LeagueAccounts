@@ -57,7 +57,7 @@ export function openLoginOverlay(options: {
     step === "focus" && !options.viaRiot ? t("login.step.focusPrevious") : t(LABELS[step]);
 
   const overlay = fragment(`
-    <div class="login-overlay" role="dialog" aria-modal="true" aria-live="polite">
+    <div class="login-overlay" role="dialog" aria-modal="true" aria-live="polite" tabindex="-1">
       <div class="login-stage">
         <div class="login-orbit">
           <span class="ring ring-1"></span><span class="ring ring-2"></span><span class="ring ring-3"></span>
@@ -169,6 +169,13 @@ export function openLoginOverlay(options: {
   };
 
   const onKey = (event: KeyboardEvent) => {
+    if (event.key === "Tab") {
+      event.preventDefault();
+      event.stopPropagation();
+      const button = overlay.querySelector<HTMLButtonElement>("button:not([hidden]):not(:disabled)");
+      (button ?? overlay).focus();
+      return;
+    }
     if (event.key !== "Escape") return;
     event.stopPropagation();
     if ($('[data-login="close"]', overlay).hidden) options.onCancel();
@@ -180,6 +187,7 @@ export function openLoginOverlay(options: {
     options.onCancel();
   });
   $('[data-login="close"]', overlay).addEventListener("click", () => api.close());
+  $('[data-login="cancel"]', overlay).focus();
   render();
   return api;
 }
