@@ -6,6 +6,7 @@
 
 pub mod account_manager;
 pub mod credentials;
+pub mod logging;
 pub mod models;
 pub mod rank_fetcher;
 pub mod utils;

@@ -4,6 +4,7 @@
 //! small fallback lookup mirrors the legacy Python implementation, which can
 //! still find credentials created under the service-only target name.
 
+use crate::logging::{self, Event, Reason};
 use std::error::Error;
 
 pub const SERVICE: &str = "LeagueAccounts";
@@ -11,6 +12,12 @@ pub const SERVICE: &str = "LeagueAccounts";
 type CredentialResult<T> = Result<T, Box<dyn Error + Send + Sync>>;
 
 pub fn get_password(service: &str, username: &str) -> CredentialResult<Option<String>> {
+    get_password_inner(service, username).inspect_err(|_| {
+        logging::record(Event::CredentialReadFailed, Reason::CredentialStore);
+    })
+}
+
+fn get_password_inner(service: &str, username: &str) -> CredentialResult<Option<String>> {
     let primary_target = format!("{username}@{service}");
     let primary = keyring::Entry::new_with_target(&primary_target, service, username)?;
     match primary.get_password() {
@@ -39,6 +46,12 @@ pub fn get_password(service: &str, username: &str) -> CredentialResult<Option<St
 }
 
 pub fn set_password(service: &str, username: &str, password: &str) -> CredentialResult<()> {
+    set_password_inner(service, username, password).inspect_err(|_| {
+        logging::record(Event::CredentialWriteFailed, Reason::CredentialStore);
+    })
+}
+
+fn set_password_inner(service: &str, username: &str, password: &str) -> CredentialResult<()> {
     // Migrate a legacy service-only entry before replacing it with the
     // account-specific target. This preserves credentials created by the
     // previous implementation when a second account is added.
@@ -51,7 +64,9 @@ pub fn set_password(service: &str, username: &str, password: &str) -> Credential
                     if let Ok(migrated) =
                         keyring::Entry::new_with_target(&migrated_target, service, existing_user)
                     {
-                        let _ = migrated.set_password(&existing_password);
+                        let _ = migrated.set_password(&existing_password).inspect_err(|_| {
+                            logging::record(Event::CredentialWriteFailed, Reason::CredentialStore);
+                        });
                     }
                 }
             }
@@ -64,6 +79,12 @@ pub fn set_password(service: &str, username: &str, password: &str) -> Credential
 }
 
 pub fn delete_password(service: &str, username: &str) -> CredentialResult<()> {
+    delete_password_inner(service, username).inspect_err(|_| {
+        logging::record(Event::CredentialDeleteFailed, Reason::CredentialStore);
+    })
+}
+
+fn delete_password_inner(service: &str, username: &str) -> CredentialResult<()> {
     let primary_target = format!("{username}@{service}");
     let entry = keyring::Entry::new_with_target(&primary_target, service, username)?;
     match entry.delete_credential() {

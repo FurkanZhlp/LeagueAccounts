@@ -1,3 +1,4 @@
+use crate::logging::{self, Event, Reason};
 use crate::models::{Account, RankInfo};
 use html_escape::decode_html_entities;
 use regex::Regex;
@@ -23,14 +24,25 @@ impl RankFetcher {
             )
             .timeout(Duration::from_secs(20))
             .build()
-            .unwrap_or_else(|_| reqwest::blocking::Client::new());
+            .unwrap_or_else(|error| {
+                logging::record(Event::RankClientFailed, Reason::from_request(&error));
+                reqwest::blocking::Client::new()
+            });
         Self { client }
     }
 
     pub fn fetch_rank(&self, account: &Account) -> RankInfo {
-        self.fetch_from_opgg(account)
+        let url = self.build_opgg_url(&account.region, &account.name);
+        self.fetch_rank_from_url(&url)
+    }
+
+    fn fetch_rank_from_url(&self, url: &str) -> RankInfo {
+        self.fetch_from_opgg(url)
             .map(|info| self.with_defaults(info))
-            .unwrap_or_else(|_| RankInfo::error())
+            .unwrap_or_else(|reason| {
+                logging::record(Event::RankFetchFailed, reason);
+                RankInfo::error()
+            })
     }
 
     pub fn build_opgg_url(&self, region: &str, summoner_name: &str) -> String {
@@ -50,20 +62,25 @@ impl RankFetcher {
         }
     }
 
-    fn fetch_from_opgg(&self, account: &Account) -> Result<RankInfo, String> {
-        let url = self.build_opgg_url(&account.region, &account.name);
+    fn fetch_from_opgg(&self, url: &str) -> Result<RankInfo, Reason> {
         let response = self
             .client
             .get(url)
             .header(reqwest::header::ACCEPT_LANGUAGE, "en-US,en;q=0.9")
             .send()
-            .map_err(|error| error.to_string())?
+            .map_err(|error| Reason::from_request(&error))?
             .error_for_status()
-            .map_err(|error| error.to_string())?;
-        let body = response.text().map_err(|error| error.to_string())?;
+            .map_err(|error| Reason::from_request(&error))?;
+        let body = response.text().map_err(|error| {
+            if error.is_timeout() {
+                Reason::Timeout
+            } else {
+                Reason::ResponseBody
+            }
+        })?;
         let decoded_payload = decode_html_entities(&body).replace("\\\"", "\"");
         if !decoded_payload.contains("profile_icons/profileIcon") {
-            return Err("OP.GG profile payload was not found".to_owned());
+            return Err(Reason::ProfileMissing);
         }
 
         let soup = Html::parse_document(&body);
@@ -408,5 +425,58 @@ mod tests {
             fetcher.parse_last_season_from_opgg(payload),
             ("Challenger 1255LP".into(), "Master 285LP".into())
         );
+    }
+
+    #[test]
+    fn http_failures_log_only_categories_without_urls_or_bodies() {
+        use std::io::{BufRead, Write};
+        let account_id = "PRIVATE_ACCOUNT_ID_c514";
+        let password = "PRIVATE_PASSWORD_6d92";
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = std::thread::spawn(move || {
+            for status in [403, 429, 503, 200] {
+                let (mut stream, _) = listener.accept().unwrap();
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(5)))
+                    .unwrap();
+                let mut reader = std::io::BufReader::new(&mut stream);
+                let mut header = String::new();
+                loop {
+                    header.clear();
+                    assert!(reader.read_line(&mut header).unwrap() > 0);
+                    if header == "\r\n" {
+                        break;
+                    }
+                }
+                let body = format!("{account_id}\n{password}");
+                write!(stream, "HTTP/1.1 {status} Test\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
+            }
+        });
+        let fetcher = RankFetcher {
+            client: reqwest::blocking::Client::builder()
+                .no_proxy()
+                .timeout(Duration::from_secs(5))
+                .build()
+                .unwrap(),
+        };
+        let url = format!("http://{address}/{account_id}?password={password}");
+        let logs = logging::capture(|| {
+            for _ in 0..4 {
+                assert_eq!(fetcher.fetch_rank_from_url(&url).tier, "Error");
+            }
+        });
+        server.join().unwrap();
+        for reason in [
+            "http_forbidden",
+            "http_rate_limited",
+            "http_server",
+            "profile_missing",
+        ] {
+            assert!(logs.contains(&format!("event=rank_fetch_failed reason={reason}")));
+        }
+        for secret in [account_id, password, &url] {
+            assert!(!logs.contains(secret));
+        }
     }
 }

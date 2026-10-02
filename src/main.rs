@@ -3,6 +3,7 @@
 use eframe::egui::{self, Color32, Key, Modifiers, RichText};
 use leagueaccounts::account_manager::KEYRING_SERVICE;
 use leagueaccounts::credentials;
+use leagueaccounts::logging::{self, Event, Reason};
 use leagueaccounts::models::{Account, AccountKey, RankInfo};
 use leagueaccounts::rank_fetcher::{RankFetcher, RankProvider};
 use leagueaccounts::utils::{region_from_display, sort_accounts, REGION_MAP, TIER_ORDER};
@@ -78,6 +79,7 @@ impl LeagueAccountsApp {
                 }) {
                     Ok(hook) => app.native_auto_type = Some(hook),
                     Err(error) => {
+                        logging::record(Event::ShortcutInstallFailed, Reason::from_error(&error));
                         app.status =
                             format!("{}; Auto-type shortcut unavailable: {error}", app.status);
                     }
@@ -279,6 +281,7 @@ impl LeagueAccountsApp {
         if accounts.is_empty() {
             return;
         }
+        logging::record(Event::RankRefreshStarted, Reason::None);
         let provider = Arc::clone(&self.manager.rank_fetcher);
         let jobs: Vec<(AccountKey, Account)> = accounts
             .into_iter()
@@ -303,7 +306,10 @@ impl LeagueAccountsApp {
                 let info = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     provider.fetch_rank(&account)
                 }))
-                .unwrap_or_else(|_| RankInfo::error());
+                .unwrap_or_else(|_| {
+                    logging::record(Event::RankWorkerPanicked, Reason::None);
+                    RankInfo::error()
+                });
                 if sender.send(RankUpdate { key, info }).is_err() {
                     break;
                 }
@@ -336,6 +342,7 @@ impl LeagueAccountsApp {
             if let Err(error) = self.manager.save_accounts() {
                 self.status = format!("Rank update save failed: {error}");
             } else {
+                logging::record(Event::RankRefreshCompleted, Reason::None);
                 self.status = "Rank updates complete.".to_owned();
             }
         }
@@ -363,7 +370,10 @@ impl LeagueAccountsApp {
             .and_then(|mut clipboard| clipboard.set_text(account.account_id.clone()))
         {
             Ok(()) => self.status = "Account ID copied.".to_owned(),
-            Err(error) => self.status = format!("Clipboard error: {error}"),
+            Err(error) => {
+                logging::record(Event::ClipboardFailed, Reason::Other);
+                self.status = format!("Clipboard error: {error}");
+            }
         }
     }
 
@@ -388,7 +398,10 @@ impl LeagueAccountsApp {
         }
         match arboard::Clipboard::new().and_then(|mut clipboard| clipboard.set_text(password)) {
             Ok(()) => self.status = "Password copied.".to_owned(),
-            Err(error) => self.status = format!("Clipboard error: {error}"),
+            Err(error) => {
+                logging::record(Event::ClipboardFailed, Reason::Other);
+                self.status = format!("Clipboard error: {error}");
+            }
         }
     }
 
@@ -428,6 +441,7 @@ impl LeagueAccountsApp {
         self.status = if completed {
             "Switched to the previous window and entered credentials.".to_owned()
         } else {
+            logging::record(Event::AutoTypeFailed, Reason::Other);
             "Auto-type failed: shortcut keys were not released, or clipboard/keyboard input was rejected.".to_owned()
         };
     }
@@ -472,7 +486,10 @@ impl LeagueAccountsApp {
             .and_then(|json| std::fs::write(&path, json).map_err(Into::into))
         {
             Ok(()) => self.status = format!("Accounts exported to {}.", path.display()),
-            Err(error) => self.status = format!("Export failed: {error}"),
+            Err(error) => {
+                logging::record(Event::ExportFailed, Reason::from_error(error.as_ref()));
+                self.status = format!("Export failed: {error}");
+            }
         }
     }
 
@@ -490,8 +507,37 @@ impl LeagueAccountsApp {
             Ok((added, skipped)) => {
                 self.status = format!("Import complete: {added} added, {skipped} skipped.")
             }
-            Err(error) => self.status = format!("Import failed: {error}"),
+            Err(error) => {
+                logging::record(Event::ImportFailed, Reason::from_error(error.as_ref()));
+                self.status = format!("Import failed: {error}");
+            }
         }
+    }
+
+    fn open_logs_folder(&mut self) {
+        let Some(directory) = logging::directory() else {
+            self.status = "Logging is unavailable: the log folder could not be created.".to_owned();
+            return;
+        };
+        #[cfg(windows)]
+        let result = std::process::Command::new("explorer.exe")
+            .arg(directory)
+            .spawn();
+        #[cfg(target_os = "macos")]
+        let result = std::process::Command::new("open").arg(directory).spawn();
+        #[cfg(all(not(windows), not(target_os = "macos")))]
+        let result = std::process::Command::new("xdg-open")
+            .arg(directory)
+            .spawn();
+        self.status = match result {
+            Ok(_) => {
+                "Log folder opened. You can inspect and share the plain-text .log files.".to_owned()
+            }
+            Err(error) => {
+                logging::record(Event::LogFolderOpenFailed, Reason::from_error(&error));
+                "Could not open the log folder. Logs are in the LeagueAccounts/logs application data folder.".to_owned()
+            }
+        };
     }
 
     fn show_edit(&mut self, account: &Account, field: EditField) {
@@ -714,6 +760,9 @@ impl LeagueAccountsApp {
         egui::Panel::bottom("status").show_inside(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
                 ui.label(RichText::new(&self.status).weak());
+                if !logging::is_available() {
+                    ui.label(RichText::new("File logging unavailable").color(Color32::LIGHT_RED));
+                }
             });
         });
 
@@ -736,12 +785,15 @@ impl LeagueAccountsApp {
                         }
                         ui.add_space(6.0);
                         ui.add_enabled_ui(self.selected.is_some(), |ui| {
-                            ui.horizontal(|ui| {
+                            ui.horizontal_wrapped(|ui| {
                                 if ui.button("Copy Account ID").clicked() {
                                     self.copy_account_id();
                                 }
                                 if ui.button("Copy Password").clicked() {
                                     self.copy_password();
+                                }
+                                if ui.button("Login (auto-type)").clicked() {
+                                    self.auto_type_selected();
                                 }
                             });
                         });
@@ -763,6 +815,15 @@ impl LeagueAccountsApp {
                         });
                         if ui.button("Shortcuts Help").clicked() {
                             self.show_help = true;
+                        }
+                        if ui
+                            .button("Open Logs Folder")
+                            .on_hover_text(
+                                "Plain-text diagnostic logs exclude account data and passwords.",
+                            )
+                            .clicked()
+                        {
+                            self.open_logs_folder();
                         }
                     });
             });
@@ -1107,7 +1168,11 @@ fn paste_current_clipboard() -> bool {
     control_down && v_down && v_up && control_up
 }
 
-fn main() -> eframe::Result {
+fn main() {
+    logging::install_panic_hook();
+    // A logging failure must not prevent users from opening their accounts.
+    // The status bar persistently indicates when logging is unavailable.
+    let _ = logging::init();
     let icon =
         eframe::icon_data::from_png_bytes(APP_ICON_PNG).expect("app icon must be a valid PNG");
     let options = eframe::NativeOptions {
@@ -1117,11 +1182,17 @@ fn main() -> eframe::Result {
             .with_maximized(true),
         ..Default::default()
     };
-    eframe::run_native(
+    let result = eframe::run_native(
         "League Accounts",
         options,
         Box::new(|cc| Ok(Box::new(LeagueAccountsApp::new(cc)))),
-    )
+    );
+    if result.is_err() {
+        logging::record(Event::AppRunFailed, Reason::Other);
+        // Do not return the raw error to Rust's stderr termination handler.
+        std::process::exit(1);
+    }
+    logging::record(Event::SessionEnded, Reason::None);
 }
 
 #[cfg(test)]
