@@ -91,6 +91,14 @@ pub fn accounts_file() -> std::io::Result<PathBuf> {
     Ok(app_data_dir()?.join("league_accounts.json"))
 }
 
+pub fn history_file() -> std::io::Result<PathBuf> {
+    Ok(app_data_dir()?.join("rank_history.json"))
+}
+
+pub fn settings_file() -> std::io::Result<PathBuf> {
+    Ok(app_data_dir()?.join("settings.json"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

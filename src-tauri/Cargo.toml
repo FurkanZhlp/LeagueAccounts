@@ -1,0 +1,23 @@
+[package]
+name = "leagueaccounts-app"
+version = "3.0.0"
+edition = "2021"
+description = "League of Legends account manager for Windows"
+license = "MIT"
+publish = false
+
+[[bin]]
+name = "LeagueAccounts"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+arboard = "3.6"
+leagueaccounts = { path = ".." }
+rfd = "0.15"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tauri = { version = "2", features = [] }
+tauri-plugin-autostart = "2"

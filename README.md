@@ -1,65 +1,181 @@
-# LeagueAccounts
+<div align="center">
 
-**LeagueAccounts** helps you manage multiple **League of Legends** accounts from one Windows app, with secure password storage, quick login helpers, and automatic rank updates. The application is implemented in Rust and ships as a native Windows desktop executable.
+<img src="assets/icon.png" width="88" alt="League Accounts icon" />
 
-![LeagueAccounts app showing the account list, ranks, search filters, and account management controls](screenshot.png)
+# League Accounts
+
+**All your League of Legends & Teamfight Tactics accounts in one place.**
+One-click login, live ranks, LP history and auto refresh — with passwords kept in Windows Credential Manager.
+
+[![Latest release](https://img.shields.io/github/v/release/FurkanZhlp/LeagueAccounts?label=download&color=c8aa6e)](https://github.com/FurkanZhlp/LeagueAccounts/releases/latest)
+![Windows](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0ac8b9)
+[![License: MIT](https://img.shields.io/badge/license-MIT-b47dff)](LICENSE)
+
+<img src="docs/screenshots/overview.gif" alt="League Accounts: account cards with ranks and LP trends, switching between League of Legends and TFT" width="960" />
+
+</div>
 
 ## Features
 
-- **Quick Account Switching**: Keep all accounts in one list, searchable by account ID or summoner name.
-- **Secure Password Storage**: Store credentials with Windows Credential Manager; the local account file never contains passwords.
-- **Auto Credential Entry**: Click **Login (auto-type)** or press `CTRL+SHIFT+V` to switch back to the previous window and fill Riot Client login fields.
-- **Automatic Rank Updates**: Fetch current rank, last-season peak/finished ranks, and level from OP.GG in parallel.
-- **Import / Export**: Move account data between installs as JSON (exports include passwords by explicit request).
-- **Friend Elo filtering**: Show accounts compatible with a selected tier and division.
-- **Inline editing**: Double-click a summoner name or description to edit it.
-- **Private diagnostic logs**: Plain-text support logs with no account data or passwords.
+- **One-click login.** Press **Log in** and League Accounts opens the Riot Client, enters your credentials and launches the game: League of Legends, or Teamfight Tactics in TFT mode.
+- **LoL and TFT ranks.** Current rank, LP, level and last season's (or last set's) rank are pulled from OP.GG. Switch between modes with one click.
+- **LP history.** Every refresh is recorded. Cards show a trend line and the LP change over the last 24 hours, and each account has a full history chart.
+- **Auto refresh.** Ranks update in the background on your schedule, every 30 minutes by default.
+- **Duo finder.** The *Friend elo* filter shows which of your accounts can play ranked with a friend of a given rank.
+- **Safe by design.** Passwords live in Windows Credential Manager and never reach the interface. A copied password is wiped from the clipboard after 30 seconds.
+- **Made for daily use.** Launch with Windows, start minimized, keyboard shortcuts, import/export, update notifications, and 5 languages (English, Türkçe, Deutsch, Español, Français).
+
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/login.gif" alt="Step-by-step login progress" /><br /><sub><b>Login, step by step:</b> opening the Riot Client, entering credentials, launching the game.</sub></td>
+    <td width="50%"><img src="docs/screenshots/chart.gif" alt="LP history chart" /><br /><sub><b>LP history:</b> tier bands, hover readout, 24h / 7d / 30d / all.</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/list.png" alt="Compact list view" /><br /><sub><b>List view</b> for many accounts.</sub></td>
+    <td><img src="docs/screenshots/add.png" alt="Add account panel" /><br /><sub><b>Add one account or paste many at once.</b></sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/settings.png" alt="Settings" /><br /><sub><b>Settings:</b> startup, refresh interval, login method, updates.</sub></td>
+    <td><img src="docs/screenshots/menu.png" alt="Account context menu" /><br /><sub><b>Right-click</b> any account for every action.</sub></td>
+  </tr>
+</table>
 
 ## Installation
 
-[Download the latest release](https://github.com/FlorentTariolle/LeagueAccounts/releases/latest).
+1. Download **`LeagueAccounts.exe`** from the [latest release](https://github.com/FurkanZhlp/LeagueAccounts/releases/latest).
+2. Put it anywhere you like (for example `Documents\LeagueAccounts`) and run it. Nothing else needs to be installed.
+3. On first launch Windows SmartScreen may say *"Windows protected your PC"*, because the app is not code-signed. Click **More info → Run anyway**.
 
-## Building and running from source
+**Requirements:** Windows 10 or 11 with Microsoft Edge WebView2. WebView2 ships with Windows 11 and current Windows 10. If the window stays blank, install the [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/).
 
-```bash
-# Run the native app
-cargo run --release
+League Accounts checks GitHub for new releases and shows a banner when one is available. You can turn this off in **Settings → Updates**.
 
-# Build the Windows executable
-cargo build --release
+## Getting started
+
+### Add your accounts
+
+Click **Add account** (or press `Ctrl+N`) and fill in:
+
+| Field | What to enter |
+|---|---|
+| **Account ID** | The username you type into the Riot Client login screen |
+| **Riot ID** | Your in-game name with tag, e.g. `Hide on bush#KR1` (used to look up ranks on OP.GG) |
+| **Region** | The account's server |
+| **Password** | Stored only in Windows Credential Manager |
+
+To add several accounts at once, open the **Bulk add** tab and paste one account per line:
+
+```text
+username1--Player One#EUW--password1
+username2--Player Two#TR1--password2
 ```
 
-The executable is written to `target/release/LeagueAccounts.exe`. Account data is stored at `%APPDATA%\\LeagueAccounts\\league_accounts.json`; passwords are stored in the native Windows Credential Manager under the `LeagueAccounts` service.
+Ranks are fetched right after adding. Use **Refresh ranks** (`Ctrl+R`) at any time.
+
+### Log in
+
+Press **Log in** on a card (or `Ctrl+Shift+V` with the account selected). League Accounts will:
+
+1. Open the Riot Client.
+2. Wait until it is fully loaded and showing its login screen.
+3. Bring it to the front and enter your username and password.
+4. Wait until the Riot Client confirms you are signed in, then launch the game.
+
+A full-screen progress view shows each step, and you can cancel at any time. For safety:
+
+- Credentials are only typed after the Riot Client reports that nobody is signed in and its login window is in front. If something doesn't look right, the login stops instead of typing elsewhere.
+- If another account is signed in, you are asked before it is signed out.
+- If a League or TFT client is open with another account, League Accounts warns you before closing it. If a **match is in progress**, the warning says so: leaving a game can lead to penalties.
+- If you need to finish signing in yourself (2FA code, captcha), the game launches only after a confirmed sign-in.
+
+Prefer the old behavior? In **Settings → Login**, choose *Type into the previous window*: the app switches back to the last window with Alt+Tab and types there.
+
+### LoL and TFT modes
+
+The switch at the top changes every rank, sort order, chart and filter between **League of Legends** (ranked solo/duo) and **Teamfight Tactics** (ranked). In TFT mode, **Log in** launches Teamfight Tactics when it is installed, otherwise League of Legends.
+
+### LP tracking and auto refresh
+
+- Each refresh stores a point whenever an account's rank or LP changes.
+- The card's trend line and **▲/▼ LP** badge show recent movement. Click the trend line, or choose **LP history** from the right-click menu, to open the full chart.
+- The **Auto refresh** widget in the sidebar shows when the next refresh happens. Change the interval (5 minutes to 24 hours) in **Settings → Rank updates**.
+- Rank data comes from public OP.GG profile pages, two requests per account (LoL and TFT). Very short intervals with many accounts may get rate-limited.
+
+## Settings
+
+| Setting | Description |
+|---|---|
+| Language | English, Türkçe, Deutsch, Español, Français (follows your system language by default) |
+| Launch when Windows starts | Opens League Accounts when you sign in to Windows; optionally **start minimized** |
+| Refresh ranks automatically | On/off and interval in minutes (default 30) |
+| Login method | *Open the Riot Client and sign in* (default) or *Type into the previous window* |
+| Launch the game after signing in | Starts LoL/TFT once sign-in is confirmed |
+| Check for updates automatically | Notifies you about new GitHub releases |
 
 ## Keyboard shortcuts
 
-- `Ctrl+C`: copy the selected account ID; press again for its password.
-- `Ctrl+Shift+V`: auto-type the selected account ID and password in the previous window.
-- `Delete`: delete the selected account.
-- Double-click a summoner name or description to edit it.
+| Shortcut | Action |
+|---|---|
+| `Ctrl+Shift+V` | Log in with the selected account |
+| `Ctrl+C` | Copy the account ID (press again for the password) |
+| `↑ ↓ ← →` | Move between accounts |
+| `Delete` | Delete the selected account (asks first) |
+| `Ctrl+F` | Search |
+| `Ctrl+N` | Add account |
+| `Ctrl+R` / `F5` | Refresh ranks |
+| `Ctrl+1` / `Ctrl+2` | League of Legends / TFT mode |
+| `Ctrl+,` | Settings |
+| Double-click | Edit an account |
+| Right-click | All actions |
 
-## Reporting an error
+## Privacy and security
 
-Click **Open Logs Folder** in the app, or open `%APPDATA%\LeagueAccounts\logs`
-in Windows Explorer. Reproduce the problem, then inspect and send the newest
-`.log` files with your bug report. Logs are ordinary, unencrypted UTF-8 text;
-nothing is uploaded automatically. Share the files in the `logs` folder only.
+- **Passwords** are stored in **Windows Credential Manager** (service `LeagueAccounts`). They are never written to the app's data files and never sent to the interface. Copying and login happen in the native backend.
+- **Clipboard:** copied passwords are cleared after 30 seconds, and the clipboard is cleared after every automatic login.
+- **Exports** (`Export`) contain passwords in **plain text**. The app warns you before exporting; keep such files private.
+- **Network:** the app only contacts OP.GG (public profile pages, for ranks), the Riot Client's local API on `127.0.0.1` (sign-in state), and the GitHub API (update check). There is no telemetry and no account server.
+- **Local data** is stored in `%APPDATA%\LeagueAccounts\`:
 
-Each line contains a UTC Unix timestamp in milliseconds (`unix_ms`), severity,
-a fixed event code, a fixed failure category, app version, operating system,
-and CPU architecture. For example, a rank request rejected by OP.GG can record
-`event=rank_fetch_failed reason=http_rate_limited`.
+  | File | Contents |
+  |---|---|
+  | `league_accounts.json` | Accounts and ranks (no passwords) |
+  | `rank_history.json` | LP history |
+  | `settings.json` | Your settings |
+  | `logs\` | Diagnostic logs containing only fixed event codes, never account data |
 
-The logging API accepts only predefined enums. It cannot accept account IDs,
-passwords, summoner names, descriptions, clipboard content, imported/exported
-JSON, file paths, URLs, HTTP bodies, or raw error messages. Panic messages,
-backtraces, and dependency logs are also excluded because they can contain
-sensitive data. Failures are classified without formatting their underlying
-errors. This intentionally limits diagnostic detail to protect credentials.
+## Troubleshooting
 
-A new log starts each time the app opens. Files rotate at 1 MiB, and the newest
-20 log files are retained (up to roughly 20 MiB; files locked by another running
-instance may remain until a later cleanup). If writing fails, the status bar
-shows **File logging unavailable** and the app continues working. Rust panics
-are logged as a generic event; forceful termination or native crashes may leave
-no final event.
+| Problem | What to do |
+|---|---|
+| *Riot Client was not found* | Install the Riot Client, or switch **Settings → Login** to *Type into the previous window*. |
+| *The Riot Client login screen didn't appear in time* | Open the Riot Client once manually (it may be updating), then try again. |
+| Ranks show **Unavailable** | Check that the Riot ID (`Name#TAG`) and region are correct, then use **Refresh ranks**. OP.GG may also be rate-limiting; try again later. |
+| Something else | Open **Log folder** in the sidebar and attach the newest `.log` file to an [issue](https://github.com/FurkanZhlp/LeagueAccounts/issues). Logs contain no account data. |
+
+## Building from source
+
+Requirements: [Rust](https://rustup.rs) (MSVC toolchain), [Node.js](https://nodejs.org) 20+, and the Visual Studio C++ Build Tools.
+
+```bash
+npm install
+npx tauri dev              # run with hot reload
+npx tauri build --no-bundle  # build target/release/LeagueAccounts.exe
+```
+
+`npm run dev` opens the interface in a browser with demo data (no backend). `npm run screenshots` regenerates the images in `docs/screenshots` from that demo data (requires Chrome and ffmpeg).
+
+| Folder | Contents |
+|---|---|
+| `src/` | Rust core: storage, Credential Manager, OP.GG parsing, LP history, Riot Client integration, auto-type |
+| `src-tauri/` | Tauri shell: commands, auto refresh scheduler, settings, update checker |
+| `ui/` | Web interface (TypeScript + CSS); translations live in `ui/src/i18n.ts` |
+
+## Credits and disclaimer
+
+League Accounts builds on [LeagueAccounts](https://github.com/Tariolle/LeagueAccounts) by Florent Tariolle, licensed under the [MIT License](LICENSE).
+
+League Accounts isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games, League of Legends and Teamfight Tactics are trademarks or registered trademarks of Riot Games, Inc. Rank data is provided by OP.GG; this project is not affiliated with OP.GG.
+
+Sharing accounts may be against Riot Games' Terms of Service. You are responsible for how you use this tool.

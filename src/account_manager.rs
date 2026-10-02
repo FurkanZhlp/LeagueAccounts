@@ -1,6 +1,6 @@
 use crate::credentials;
 use crate::logging::{self, Event, Reason};
-use crate::models::{Account, AccountKey, RankInfo};
+use crate::models::{Account, AccountKey, RankInfo, TftRank};
 use crate::rank_fetcher::RankProvider;
 use crate::utils::{accounts_file, region_display, sort_accounts};
 use serde::{Deserialize, Serialize};
@@ -196,6 +196,7 @@ impl AccountManager {
                 } else {
                     item.finished_last_season
                 },
+                tft: item.tft,
             };
             if !account.password.is_empty() {
                 let _ = credentials::set_password(
@@ -271,6 +272,7 @@ struct ExportAccount {
     level: String,
     reached_last_season: String,
     finished_last_season: String,
+    tft: TftRank,
 }
 
 impl From<&Account> for ExportAccount {
@@ -288,6 +290,7 @@ impl From<&Account> for ExportAccount {
             level: account.level.clone(),
             reached_last_season: account.reached_last_season.clone(),
             finished_last_season: account.finished_last_season.clone(),
+            tft: account.tft.clone(),
         }
     }
 }
@@ -318,6 +321,8 @@ struct ImportAccount {
     reached_last_season: String,
     #[serde(default)]
     finished_last_season: String,
+    #[serde(default)]
+    tft: TftRank,
 }
 
 #[cfg(test)]
@@ -344,6 +349,7 @@ mod tests {
                 level: "100".into(),
                 reached_last_season: "Platinum IV".into(),
                 finished_last_season: "Gold I".into(),
+                tft: None,
             }
         }
     }

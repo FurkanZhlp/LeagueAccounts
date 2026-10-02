@@ -1,5 +1,5 @@
 use crate::logging::{self, Event, Reason};
-use crate::models::{Account, RankInfo};
+use crate::models::{Account, RankInfo, TftRank};
 use html_escape::decode_html_entities;
 use regex::Regex;
 use scraper::{Html, Selector};
@@ -33,7 +33,108 @@ impl RankFetcher {
 
     pub fn fetch_rank(&self, account: &Account) -> RankInfo {
         let url = self.build_opgg_url(&account.region, &account.name);
-        self.fetch_rank_from_url(&url)
+        let mut rank = self.fetch_rank_from_url(&url);
+        let tft_url = self.build_opgg_tft_url(&account.region, &account.name);
+        rank.tft = self.fetch_tft_from_url(&tft_url);
+        rank
+    }
+
+    fn fetch_tft_from_url(&self, url: &str) -> Option<TftRank> {
+        self.fetch_page(url)
+            .and_then(|body| {
+                let decoded_payload = decode_html_entities(&body).replace("\\\"", "\"");
+                if !decoded_payload.contains("profile_icons/profileIcon") {
+                    return Err(Reason::ProfileMissing);
+                }
+                Ok(self.parse_tft_from_opgg(&decoded_payload))
+            })
+            .inspect_err(|reason| logging::record(Event::TftFetchFailed, *reason))
+            .ok()
+    }
+
+    /// Parse the ranked TFT block of an OP.GG TFT profile payload.
+    ///
+    /// The page embeds the current set as the first `"entry":{...}` object and
+    /// every earlier set as `{"setName":"TFTSetN","entry":{...}}`, newest first.
+    pub fn parse_tft_from_opgg(&self, decoded_payload: &str) -> TftRank {
+        let entry = Regex::new(r#""entry"\s*:\s*"#).expect("valid TFT entry regex");
+        let set_name =
+            Regex::new(r#""setName"\s*:\s*"([^"]+)"\s*,\s*$"#).expect("valid TFT set regex");
+        let mut current: Option<serde_json::Value> = None;
+        let mut current_set = None;
+        let mut last_set: Option<serde_json::Value> = None;
+        for found in entry.find_iter(decoded_payload) {
+            let Some(Ok(value)) = serde_json::Deserializer::from_str(&decoded_payload[found.end()..])
+                .into_iter::<serde_json::Value>()
+                .next()
+            else {
+                continue;
+            };
+            if !value.is_object() {
+                continue;
+            }
+            let mut prefix_start = found.start().saturating_sub(80);
+            while !decoded_payload.is_char_boundary(prefix_start) {
+                prefix_start += 1;
+            }
+            let prefix = decoded_payload
+                .get(prefix_start..found.start())
+                .unwrap_or_default();
+            match set_name.captures(prefix) {
+                None if current.is_none() => current = Some(value),
+                Some(captures) if current.is_some() => {
+                    let name = captures.get(1).map(|m| m.as_str().to_owned());
+                    if current_set.is_none() {
+                        current_set = current
+                            .as_ref()
+                            .and_then(|entry| entry["RANKED_TFT"]["tftSetCoreName"].as_str())
+                            .map(str::to_owned);
+                    }
+                    // Skip the current set if it is repeated in the history list.
+                    if name.is_some() && name == current_set {
+                        continue;
+                    }
+                    last_set = Some(value);
+                    break;
+                }
+                _ => {}
+            }
+        }
+
+        let mut rank = TftRank::default();
+        if let Some(ranked) = current.as_ref().map(|entry| &entry["RANKED_TFT"]) {
+            if let Some(tier) = ranked["tier"].as_str() {
+                let lp = ranked["leaguePoints"]
+                    .as_i64()
+                    .map(|lp| lp.to_string())
+                    .unwrap_or_default();
+                let (tier, division, lp) =
+                    self.normalize_rank(tier, ranked["rank"].as_str().unwrap_or_default(), &lp);
+                rank.tier = tier;
+                rank.division = division;
+                rank.lp = lp;
+            }
+        }
+        rank.last_set = last_set
+            .as_ref()
+            .map(|entry| &entry["RANKED_TFT"])
+            .and_then(|ranked| {
+                let tier = ranked["tier"].as_str()?;
+                let (tier, division, _) =
+                    self.normalize_rank(tier, ranked["rank"].as_str().unwrap_or_default(), "");
+                Some(if division.is_empty() {
+                    tier
+                } else {
+                    format!("{tier} {division}")
+                })
+            })
+            .unwrap_or_else(|| "Unranked".to_owned());
+        rank
+    }
+
+    pub fn build_opgg_tft_url(&self, region: &str, summoner_name: &str) -> String {
+        self.build_opgg_url(region, summoner_name)
+            .replacen("/lol/summoners/", "/tft/summoners/", 1)
     }
 
     fn fetch_rank_from_url(&self, url: &str) -> RankInfo {
@@ -62,7 +163,7 @@ impl RankFetcher {
         }
     }
 
-    fn fetch_from_opgg(&self, url: &str) -> Result<RankInfo, Reason> {
+    fn fetch_page(&self, url: &str) -> Result<String, Reason> {
         let response = self
             .client
             .get(url)
@@ -71,13 +172,17 @@ impl RankFetcher {
             .map_err(|error| Reason::from_request(&error))?
             .error_for_status()
             .map_err(|error| Reason::from_request(&error))?;
-        let body = response.text().map_err(|error| {
+        response.text().map_err(|error| {
             if error.is_timeout() {
                 Reason::Timeout
             } else {
                 Reason::ResponseBody
             }
-        })?;
+        })
+    }
+
+    fn fetch_from_opgg(&self, url: &str) -> Result<RankInfo, Reason> {
+        let body = self.fetch_page(url)?;
         let decoded_payload = decode_html_entities(&body).replace("\\\"", "\"");
         if !decoded_payload.contains("profile_icons/profileIcon") {
             return Err(Reason::ProfileMissing);
@@ -346,6 +451,7 @@ impl RankFetcher {
             } else {
                 rank.finished_last_season
             },
+            tft: rank.tft,
         }
     }
 }

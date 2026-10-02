@@ -25,6 +25,44 @@ pub struct Account {
     pub reached_last_season: String,
     #[serde(default = "default_history")]
     pub finished_last_season: String,
+    /// Teamfight Tactics ranked standing for the same Riot account.
+    #[serde(default)]
+    pub tft: TftRank,
+}
+
+/// Ranked TFT standing: the current set and the previous set's final rank.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TftRank {
+    #[serde(default = "default_tier")]
+    pub tier: String,
+    #[serde(default)]
+    pub division: String,
+    #[serde(default)]
+    pub lp: String,
+    #[serde(default = "default_history")]
+    pub last_set: String,
+}
+
+impl Default for TftRank {
+    fn default() -> Self {
+        Self {
+            tier: default_tier(),
+            division: String::new(),
+            lp: String::new(),
+            last_set: default_history(),
+        }
+    }
+}
+
+impl TftRank {
+    pub fn error() -> Self {
+        Self {
+            tier: "Error".to_owned(),
+            division: String::new(),
+            lp: String::new(),
+            last_set: "...".to_owned(),
+        }
+    }
 }
 
 fn default_tier() -> String {
@@ -59,6 +97,8 @@ pub struct RankInfo {
     pub level: String,
     pub reached_last_season: String,
     pub finished_last_season: String,
+    /// `None` when the TFT profile could not be fetched.
+    pub tft: Option<TftRank>,
 }
 
 impl RankInfo {
@@ -70,6 +110,7 @@ impl RankInfo {
             level: String::new(),
             reached_last_season: "Unranked".to_owned(),
             finished_last_season: "Unranked".to_owned(),
+            tft: Some(TftRank::default()),
         }
     }
 
@@ -81,6 +122,7 @@ impl RankInfo {
             level: String::new(),
             reached_last_season: "...".to_owned(),
             finished_last_season: "...".to_owned(),
+            tft: None,
         }
     }
 
@@ -103,5 +145,6 @@ impl RankInfo {
         } else {
             self.finished_last_season.clone()
         };
+        account.tft = self.tft.clone().unwrap_or_else(TftRank::error);
     }
 }
