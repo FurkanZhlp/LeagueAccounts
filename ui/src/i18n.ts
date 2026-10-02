@@ -17,10 +17,6 @@ const en = {
   "side.shortcuts": "Shortcuts",
 
   "page.title": "Accounts",
-  "page.shown": "{shown} / {total} accounts shown",
-  "page.regions": "Regions: {count}",
-  "page.lol": "League of Legends ranked solo/duo",
-  "page.tft": "TFT ranked",
   "refresh.idle": "Refresh ranks",
   "refresh.busy": "Refreshing {done}/{total}",
 
@@ -310,10 +306,6 @@ const tr: Dict = {
   "side.shortcuts": "Kısayollar",
 
   "page.title": "Hesaplar",
-  "page.shown": "{shown} / {total} hesap gösteriliyor",
-  "page.regions": "{count} bölge",
-  "page.lol": "League of Legends dereceli solo/duo",
-  "page.tft": "TFT dereceli",
   "refresh.idle": "Rankları yenile",
   "refresh.busy": "Yenileniyor {done}/{total}",
 
@@ -600,10 +592,6 @@ const de: Dict = {
   "side.shortcuts": "Tastenkürzel",
 
   "page.title": "Konten",
-  "page.shown": "{shown} / {total} Konten angezeigt",
-  "page.regions": "Regionen: {count}",
-  "page.lol": "League of Legends Ranked Solo/Duo",
-  "page.tft": "TFT Ranked",
   "refresh.idle": "Ränge aktualisieren",
   "refresh.busy": "Aktualisiere {done}/{total}",
 
@@ -890,10 +878,6 @@ const es: Dict = {
   "side.shortcuts": "Atajos",
 
   "page.title": "Cuentas",
-  "page.shown": "Mostrando {shown} de {total} cuentas",
-  "page.regions": "Regiones: {count}",
-  "page.lol": "League of Legends clasificatoria solo/dúo",
-  "page.tft": "TFT clasificatoria",
   "refresh.idle": "Actualizar rangos",
   "refresh.busy": "Actualizando {done}/{total}",
 
@@ -1180,10 +1164,6 @@ const fr: Dict = {
   "side.shortcuts": "Raccourcis",
 
   "page.title": "Comptes",
-  "page.shown": "{shown} / {total} comptes affichés",
-  "page.regions": "Régions : {count}",
-  "page.lol": "League of Legends classé solo/duo",
-  "page.tft": "TFT classé",
   "refresh.idle": "Actualiser les rangs",
   "refresh.busy": "Actualisation {done}/{total}",
 
@@ -1470,10 +1450,6 @@ const pt: Dict = {
   "side.shortcuts": "Atalhos",
 
   "page.title": "Contas",
-  "page.shown": "{shown} / {total} contas apresentadas",
-  "page.regions": "Regiões: {count}",
-  "page.lol": "League of Legends competitivo a solo/duo",
-  "page.tft": "TFT competitivo",
   "refresh.idle": "Atualizar classificações",
   "refresh.busy": "A atualizar {done}/{total}",
 

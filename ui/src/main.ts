@@ -306,15 +306,6 @@ function renderDistribution(): void {
     .join("");
 }
 
-function renderSubtitle(): void {
-  const regions = new Set(state.accounts.map((account) => account.regionDisplay));
-  const shown = visibleAccounts().length;
-  const parts = [t("page.shown", { shown, total: state.accounts.length })];
-  if (regions.size) parts.push(t("page.regions", { count: regions.size }));
-  parts.push(t(state.mode === "lol" ? "page.lol" : "page.tft"));
-  $("#page-sub").textContent = parts.join(" · ");
-}
-
 function renderControls(): void {
   document.documentElement.dataset.mode = state.mode;
   document.querySelectorAll<HTMLButtonElement>(".mode-btn").forEach((button) => {
@@ -337,7 +328,6 @@ function render(): void {
   renderAccounts();
   renderStats();
   renderDistribution();
-  renderSubtitle();
 }
 
 // ---------------------------------------------------------------- actions
@@ -1091,7 +1081,6 @@ function wire(): void {
   search.addEventListener("input", () => {
     state.search = search.value;
     renderAccounts();
-    renderSubtitle();
   });
 
   const regionFilter = $<HTMLSelectElement>("#region-filter");

@@ -453,30 +453,6 @@ body.ready .shell {
   scroll-behavior: smooth;
 }
 
-.page-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 20px;
-  margin-bottom: 20px;
-}
-.page-title {
-  margin: 0;
-  font-family: "Cinzel", serif;
-  font-weight: 600;
-  font-size: 30px;
-  letter-spacing: 0.05em;
-  background: linear-gradient(100deg, #fff 10%, color-mix(in srgb, var(--accent) 80%, white) 60%, var(--accent));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-.page-sub {
-  margin: 6px 0 0;
-  color: var(--muted);
-  font-size: 13px;
-}
-
 /* ------------------------------------------------------------------ buttons */
 
 .btn {
