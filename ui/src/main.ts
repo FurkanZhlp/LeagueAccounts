@@ -549,7 +549,7 @@ function openMenu(account: AccountView, x: number, y: number): void {
     { label: t("menu.edit"), icon: "pencil", run: () => void editAccount(account) },
     "sep",
     { label: t("menu.delete"), icon: "trash", danger: true, hint: "Del", run: () => void deleteAccount(account) },
-  ]);
+  ], "account");
 }
 
 async function refreshAll(): Promise<void> {
@@ -1039,7 +1039,6 @@ function showShortcuts(): void {
 /** Translate static markup and the option lists built in code. */
 function applyLanguage(): void {
   applyStatic();
-  $(".lang-code").textContent = lang().toUpperCase();
   const friendTier = $<HTMLSelectElement>("#friend-tier");
   const selectedTier = friendTier.value || state.friendTier;
   friendTier.innerHTML =
@@ -1058,9 +1057,9 @@ function openLangMenu(): void {
     LANGUAGES.map((language) => ({
       label: language.name,
       icon: language.code === lang() ? "check" : "languages",
-      hint: language.code.toUpperCase(),
       run: () => changeLanguage(language.code),
     })),
+    "language",
   );
 }
 

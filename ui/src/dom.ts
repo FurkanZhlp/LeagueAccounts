@@ -184,10 +184,10 @@ export interface MenuItem {
   run: () => void;
 }
 
-export function contextMenu(x: number, y: number, items: (MenuItem | "sep")[]): void {
+export function contextMenu(x: number, y: number, items: (MenuItem | "sep")[], kind: "account" | "language"): void {
   closeMenu();
   const menu = fragment(`
-    <div class="menu" role="menu">
+    <div class="menu menu-${kind}" role="menu">
       ${items
         .map((item, index) =>
           item === "sep"

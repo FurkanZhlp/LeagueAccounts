@@ -279,13 +279,10 @@ code {
 .lang-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  width: 32px;
   margin: 8px 8px 8px 0;
-  padding: 0 10px;
   border-radius: 9px;
-  font-size: 11.5px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
   color: var(--muted);
   border: 1px solid var(--line);
   transition:
@@ -1620,6 +1617,12 @@ select option {
 }
 .menu.menu-out {
   animation: fade-out 0.12s ease forwards;
+}
+.menu-language {
+  min-width: 0;
+}
+.menu-language .menu-item {
+  white-space: nowrap;
 }
 @keyframes menu-in {
   from {
