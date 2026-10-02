@@ -403,7 +403,7 @@ pub fn status() -> GameStatus {
 }
 
 /// Close the League/TFT client and game: politely first, then forcefully.
-fn close_league() -> bool {
+fn close_league(cancel: &AtomicBool) -> Result<(), LoginError> {
     let names: Vec<&str> = CLIENT_PROCESSES.iter().copied().chain([GAME_PROCESS]).collect();
     let taskkill = |force: bool| {
         let mut command = std::process::Command::new("taskkill");
@@ -424,17 +424,44 @@ fn close_league() -> bool {
         let processes = running_processes();
         !names.iter().any(|name| processes.contains(*name))
     };
+    close_league_with(cancel, taskkill, closed, || {
+        thread::sleep(Duration::from_millis(500));
+    })
+}
+
+fn check_cancelled(cancel: &AtomicBool) -> Result<(), LoginError> {
+    if cancel.load(Ordering::SeqCst) {
+        Err(LoginError::Cancelled)
+    } else {
+        Ok(())
+    }
+}
+
+fn close_league_with(
+    cancel: &AtomicBool,
+    mut taskkill: impl FnMut(bool),
+    mut closed: impl FnMut() -> bool,
+    mut wait: impl FnMut(),
+) -> Result<(), LoginError> {
+    check_cancelled(cancel)?;
     taskkill(false);
     for attempt in 0..20 {
-        thread::sleep(Duration::from_millis(500));
+        wait();
+        check_cancelled(cancel)?;
         if closed() {
-            return true;
+            return Ok(());
         }
         if attempt == 10 {
+            check_cancelled(cancel)?;
             taskkill(true);
         }
     }
-    closed()
+    check_cancelled(cancel)?;
+    if closed() {
+        Ok(())
+    } else {
+        Err(LoginError::CloseFailed)
+    }
 }
 
 /// Open the Riot Client and sign in with the credentials, then launch `game`
@@ -453,20 +480,21 @@ pub fn login(
     cancel: &AtomicBool,
 ) -> Result<LoginOutcome, LoginError> {
     let cancelled = || cancel.load(Ordering::SeqCst);
+    check_cancelled(cancel)?;
     let path = client_path().ok_or(LoginError::ClientMissing)?;
 
     // Never sign another account in under an open League client or match.
     let current = status();
+    check_cancelled(cancel)?;
     if current.league_running() && !current.signed_in_as(account_id) {
         if !close_running {
             return Err(LoginError::LeagueRunning);
         }
         progress(LoginStep::CloseLeague);
-        if !close_league() {
-            return Err(LoginError::CloseFailed);
-        }
+        close_league(cancel)?;
     }
     progress(LoginStep::OpenClient);
+    check_cancelled(cancel)?;
     if !open_client(&path) {
         return Err(LoginError::LaunchFailed);
     }
@@ -682,5 +710,62 @@ mod windows {
     }
     pub fn foreground_is(_: HWND) -> bool {
         false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::Cell;
+
+    #[test]
+    fn cancelled_close_does_not_touch_processes() {
+        let cancel = AtomicBool::new(true);
+        let result = close_league_with(
+            &cancel,
+            |_| panic!("cancelled close must not send process requests"),
+            || panic!("cancelled close must not query processes"),
+            || panic!("cancelled close must not wait"),
+        );
+        assert_eq!(result, Err(LoginError::Cancelled));
+    }
+
+    #[test]
+    fn cancellation_before_escalation_prevents_forced_termination() {
+        let cancel = AtomicBool::new(false);
+        let checks = Cell::new(0);
+        let mut requests = Vec::new();
+        let result = close_league_with(
+            &cancel,
+            |force| requests.push(force),
+            || {
+                checks.set(checks.get() + 1);
+                if checks.get() == 11 {
+                    cancel.store(true, Ordering::SeqCst);
+                }
+                false
+            },
+            || {},
+        );
+        assert_eq!(result, Err(LoginError::Cancelled));
+        assert_eq!(requests, vec![false]);
+    }
+
+    #[test]
+    fn uncancelled_close_can_escalate_and_confirm_exit() {
+        let cancel = AtomicBool::new(false);
+        let forced = Cell::new(false);
+        let mut requests = Vec::new();
+        let result = close_league_with(
+            &cancel,
+            |force| {
+                requests.push(force);
+                forced.set(force);
+            },
+            || forced.get(),
+            || {},
+        );
+        assert_eq!(result, Ok(()));
+        assert_eq!(requests, vec![false, true]);
     }
 }
