@@ -697,6 +697,9 @@ select:open::picker(select) {
   opacity: 1;
   transform: none;
 }
+#friend-tier::picker(select) {
+  max-height: min(360px, calc(100dvh - 16px));
+}
 @starting-style {
   select:open::picker(select) {
     opacity: 0;
