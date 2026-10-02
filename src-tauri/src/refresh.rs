@@ -2,6 +2,7 @@
 //! scheduler.
 
 use crate::views::{account_view, fail, fail_with, AppError, Key};
+use leagueaccounts::history::RankHistory;
 use leagueaccounts::logging::{self, Event, Reason};
 use leagueaccounts::models::{Account, RankInfo};
 use leagueaccounts::utils::sort_accounts;
@@ -87,6 +88,7 @@ impl Settings {
 
 pub struct Shared {
     pub manager: Mutex<AccountManager>,
+    pub history: Mutex<RankHistory>,
     pub settings: Mutex<Settings>,
     pub settings_path: Option<PathBuf>,
     pub refresh_running: Mutex<bool>,
@@ -209,8 +211,10 @@ pub fn start_refresh(app: AppHandle, shared: Arc<Shared>, accounts: Vec<Account>
                     let key = account.key();
                     let Ok(mut manager) = shared.manager.lock() else { break };
                     manager.apply_rank_info(&key, &info);
+                    let Ok(mut history) = shared.history.lock() else { break };
+                    history.record(&key, &info, now_ms());
                     if let Some(updated) = manager.account(&key) {
-                        let _ = app.emit("rank-update", account_view(updated));
+                        let _ = app.emit("rank-update", account_view(updated, &history));
                     }
                 })
             })
@@ -219,7 +223,7 @@ pub fn start_refresh(app: AppHandle, shared: Arc<Shared>, accounts: Vec<Account>
             let _ = worker.join();
         }
 
-        let error = match shared.manager.lock() {
+        let mut error = match shared.manager.lock() {
             Ok(mut manager) => {
                 sort_accounts(&mut manager.accounts);
                 manager
@@ -229,6 +233,11 @@ pub fn start_refresh(app: AppHandle, shared: Arc<Shared>, accounts: Vec<Account>
             }
             Err(_) => Some(fail("storage_locked")),
         };
+        if let Ok(history) = shared.history.lock() {
+            if let Err(history_error) = history.save() {
+                error.get_or_insert(fail_with("save_failed", history_error));
+            }
+        }
         if error.is_none() {
             logging::record(Event::RankRefreshCompleted, Reason::None);
         }

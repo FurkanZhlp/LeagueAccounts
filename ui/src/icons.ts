@@ -1,5 +1,6 @@
 import {
   ArrowDownUp,
+  ChartLine,
   Clock,
   Settings,
   Check,
@@ -35,6 +36,7 @@ import {
 
 const ICONS: Record<string, IconNode> = {
   "arrow-down-up": ArrowDownUp,
+  chart: ChartLine,
   clock: Clock,
   settings: Settings,
   check: Check,

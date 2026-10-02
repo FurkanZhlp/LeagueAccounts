@@ -1205,7 +1205,7 @@ select option {
   animation: modal-in 0.4s var(--spring) both;
 }
 .modal-wide {
-  width: min(860px, 100%);
+  width: min(620px, 100%);
 }
 .overlay-out .modal {
   animation: modal-out 0.2s ease forwards;
@@ -1237,8 +1237,6 @@ select option {
   flex-direction: column;
   gap: 14px;
   padding: 18px 22px;
-  max-height: calc(100vh - var(--titlebar) - 160px);
-  overflow-y: auto;
 }
 .modal-foot {
   display: flex;

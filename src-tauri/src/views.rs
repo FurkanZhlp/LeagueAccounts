@@ -1,7 +1,11 @@
 //! Data shapes sent to the web interface. Passwords never appear here.
 
+use leagueaccounts::history::{QueueHistory, RankHistory, Snapshot};
 use leagueaccounts::models::{Account, AccountKey};
 use serde::{Deserialize, Serialize};
+
+/// Points of the card sparkline, newest last.
+const TREND_POINTS: usize = 40;
 
 /// A command failure the UI translates: a stable `code` plus an optional
 /// untranslated detail (for example an OS error message).
@@ -68,6 +72,13 @@ pub struct TftView {
     last_set: String,
 }
 
+/// `[unix_ms, score]` pairs per queue.
+#[derive(Clone, Default, Serialize)]
+pub struct TrendView {
+    lol: Vec<(u64, i32)>,
+    tft: Vec<(u64, i32)>,
+}
+
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountView {
@@ -80,9 +91,19 @@ pub struct AccountView {
     has_password: bool,
     lol: LolView,
     tft: TftView,
+    trend: TrendView,
 }
 
-pub fn account_view(account: &Account) -> AccountView {
+fn trend(series: &[Snapshot]) -> Vec<(u64, i32)> {
+    let start = series.len().saturating_sub(TREND_POINTS);
+    series[start..]
+        .iter()
+        .filter_map(|point| point.score().map(|score| (point.t, score)))
+        .collect()
+}
+
+pub fn account_view(account: &Account, history: &RankHistory) -> AccountView {
+    let queues = history.get(&account.key());
     AccountView {
         account_id: account.account_id.clone(),
         name: account.name.clone(),
@@ -104,5 +125,51 @@ pub fn account_view(account: &Account) -> AccountView {
             lp: account.tft.lp.clone(),
             last_set: account.tft.last_set.clone(),
         },
+        trend: queues
+            .map(|queues| TrendView {
+                lol: trend(&queues.lol),
+                tft: trend(&queues.tft),
+            })
+            .unwrap_or_default(),
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PointView {
+    t: u64,
+    tier: String,
+    division: String,
+    lp: i32,
+    score: i32,
+}
+
+#[derive(Default, Serialize)]
+pub struct HistoryView {
+    lol: Vec<PointView>,
+    tft: Vec<PointView>,
+}
+
+fn points(series: &[Snapshot]) -> Vec<PointView> {
+    series
+        .iter()
+        .filter_map(|point| {
+            Some(PointView {
+                t: point.t,
+                tier: point.tier.clone(),
+                division: point.division.clone(),
+                lp: point.lp,
+                score: point.score()?,
+            })
+        })
+        .collect()
+}
+
+impl From<&QueueHistory> for HistoryView {
+    fn from(history: &QueueHistory) -> Self {
+        Self {
+            lol: points(&history.lol),
+            tft: points(&history.tft),
+        }
     }
 }

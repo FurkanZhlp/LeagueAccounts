@@ -1,6 +1,38 @@
 // Development-only stand-in for the Tauri backend, used when the UI is opened
 // in a plain browser (`npm run dev`). Never bundled into release builds.
-import { api, events, keyId, type AccountView, type Key, type RefreshDone } from "./api";
+import { api, events, keyId, type AccountView, type HistoryPoint, type Key, type RefreshDone } from "./api";
+
+const LADDER = ["Iron", "Bronze", "Silver", "Gold", "Platinum", "Emerald", "Diamond"];
+const DIVS = ["IV", "III", "II", "I"];
+
+function scoreOf(rank: { tier: string; division: string; lp: string }): number | null {
+  const lp = Number(rank.lp) || 0;
+  if (["Master", "Grandmaster", "Challenger"].includes(rank.tier)) return 2800 + lp;
+  const tier = LADDER.indexOf(rank.tier);
+  return tier < 0 ? null : tier * 400 + DIVS.indexOf(rank.division) * 100 + Math.min(lp, 100);
+}
+
+function pointOf(t: number, score: number): HistoryPoint {
+  if (score >= 2800) return { t, tier: "Master", division: "", lp: score - 2800, score };
+  return { t, tier: LADDER[Math.floor(score / 400)], division: DIVS[Math.floor((score % 400) / 100)], lp: score % 100, score };
+}
+
+/** A deterministic random walk ending at the current rank. */
+function fakeHistory(seed: string, end: number | null): HistoryPoint[] {
+  if (end === null) return [];
+  let state = [...seed].reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  const random = () => ((state = (state * 9301 + 49297) % 233280) / 233280);
+  const now = Date.now();
+  const points: HistoryPoint[] = [];
+  let score = end;
+  let t = now - 20 * 60_000;
+  for (let index = 0; index < 60; index++) {
+    points.push(pointOf(t, Math.max(0, Math.round(score))));
+    score -= (random() - 0.45) * 40;
+    t -= (2 + random() * 14) * 60 * 60_000;
+  }
+  return points.reverse();
+}
 
 const lol = (tier: string, division: string, lp: string, finished = "Gold II", reached = finished) => ({
   tier,
@@ -30,7 +62,14 @@ const sample: AccountView[] = [
   hasPassword: true,
   lol: lolRank as AccountView["lol"],
   tft: tftRank as AccountView["tft"],
+  trend: { lol: [], tft: [] },
 }));
+for (const account of sample) {
+  account.trend = {
+    lol: fakeHistory(account.accountId + "l", scoreOf(account.lol)).slice(-40).map((point) => [point.t, point.score]),
+    tft: fakeHistory(account.accountId + "t", scoreOf(account.tft)).slice(-40).map((point) => [point.t, point.score]),
+  };
+}
 
 type Handler<T> = (payload: T) => void;
 const listeners = {
@@ -76,6 +115,13 @@ export function installMock(): void {
       settings,
       schedule: { enabled: true, intervalMinutes: 30, nextAt: Date.now() + 23 * 60_000, lastAt: Date.now() - 7 * 60_000, running: false },
     }),
+    getHistory: async (key: Key) => {
+      const account = find(key)!;
+      return {
+        lol: fakeHistory(account.accountId + "l", scoreOf(account.lol)),
+        tft: fakeHistory(account.accountId + "t", scoreOf(account.tft)),
+      };
+    },
     getSettings: async () => settings,
     updateSettings: async (input: object) => Object.assign(settings, input),
     login: async () => {
@@ -106,6 +152,7 @@ export function installMock(): void {
         hasPassword: true,
         lol: lol("Unranked", "", "", "N/A"),
         tft: tft("Unranked", "", "", "N/A"),
+        trend: { lol: [], tft: [] },
       };
       accounts.push(account);
       setTimeout(() => fakeFetch([{ ...account, level: "30", lol: lol("Silver", "II", "45", "Bronze I") }]), 50);

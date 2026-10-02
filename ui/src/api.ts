@@ -21,6 +21,27 @@ export interface TftRank {
   lastSet: string;
 }
 
+/** `[unixMs, score]` pairs, oldest first (see `scoreLabel`). */
+export type TrendPoint = [number, number];
+
+export interface Trend {
+  lol: TrendPoint[];
+  tft: TrendPoint[];
+}
+
+export interface HistoryPoint {
+  t: number;
+  tier: string;
+  division: string;
+  lp: number;
+  score: number;
+}
+
+export interface History {
+  lol: HistoryPoint[];
+  tft: HistoryPoint[];
+}
+
 export type LoginMethod = "riot" | "previous";
 
 export interface Settings {
@@ -89,6 +110,7 @@ export interface AccountView {
   hasPassword: boolean;
   lol: LolRank;
   tft: TftRank;
+  trend: Trend;
 }
 
 /** Backend failure: a stable code the UI translates, plus optional detail. */
@@ -178,6 +200,7 @@ export const api = {
   gameStatus: (key: Key) => call<GameStatus>("game_status", { key }),
   checkUpdate: () => call<UpdateStatus>("check_update"),
   openRelease: (url: string) => call<void>("open_release", { url }),
+  getHistory: (key: Key) => call<History>("get_history", { key }),
   getSettings: () => call<Settings>("get_settings"),
   updateSettings: (input: SettingsInput) => call<Settings>("update_settings", { input }),
   exportData: (title: string) => call<string | null>("export_data", { title }),
