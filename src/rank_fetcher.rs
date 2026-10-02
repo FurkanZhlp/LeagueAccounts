@@ -32,6 +32,9 @@ impl RankFetcher {
     }
 
     pub fn fetch_rank(&self, account: &Account) -> RankInfo {
+        if account.name.trim().is_empty() {
+            return RankInfo::unranked();
+        }
         let url = self.build_opgg_url(&account.region, &account.name);
         let mut rank = self.fetch_rank_from_url(&url);
         let tft_url = self.build_opgg_tft_url(&account.region, &account.name);

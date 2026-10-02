@@ -105,10 +105,15 @@ impl AccountManager {
             .find(|account| account.key() == *key)
     }
 
-    pub fn apply_rank_info(&mut self, key: &AccountKey, info: &RankInfo) {
-        if let Some(account) = self.account_mut(key) {
+    pub fn apply_rank_info(&mut self, fetched: &Account, info: &RankInfo) -> bool {
+        if let Some(account) = self
+            .account_mut(&fetched.key())
+            .filter(|account| account.name == fetched.name)
+        {
             info.apply_to(account);
+            return true;
         }
+        false
     }
 
     /// Fetch all ranks with at most four concurrent provider calls.
@@ -352,6 +357,34 @@ mod tests {
                 tft: None,
             }
         }
+    }
+
+    #[test]
+    fn a_lookup_for_an_old_riot_id_cannot_overwrite_the_edited_account() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut manager = AccountManager::with_path(
+            directory.path().join("accounts.json"),
+            Arc::new(crate::rank_fetcher::RankFetcher::default()),
+        );
+        let fetched = Account {
+            account_id: "user".into(),
+            name: "Old Name#TAG".into(),
+            region: "euw".into(),
+            ..Account::default()
+        };
+        manager.accounts.push(fetched.clone());
+        manager.accounts[0].name.clear();
+        let info = RankInfo {
+            tier: "Diamond".into(),
+            ..RankInfo::default()
+        };
+        assert!(!manager.apply_rank_info(&fetched, &info));
+        assert_eq!(manager.accounts[0].tier, fetched.tier);
+        manager.accounts[0].name = "New Name#TAG".into();
+        assert!(!manager.apply_rank_info(&fetched, &info));
+        let current = manager.accounts[0].clone();
+        assert!(manager.apply_rank_info(&current, &info));
+        assert_eq!(manager.accounts[0].tier, "Diamond");
     }
 
     #[test]

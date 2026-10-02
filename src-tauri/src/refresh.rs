@@ -208,7 +208,9 @@ pub fn start_refresh(app: AppHandle, shared: Arc<Shared>, accounts: Vec<Account>
                     });
                     let key = account.key();
                     let Ok(mut manager) = shared.manager.lock() else { break };
-                    manager.apply_rank_info(&key, &info);
+                    if !manager.apply_rank_info(&account, &info) {
+                        continue;
+                    }
                     if let Some(updated) = manager.account(&key) {
                         let _ = app.emit("rank-update", account_view(updated));
                     }

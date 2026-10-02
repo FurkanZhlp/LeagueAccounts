@@ -1,7 +1,7 @@
 // Full-screen sign-in progress: shows each step reported by the backend
 // ("login-step" events) as it happens.
 
-import type { AccountView, LoginStep } from "./api";
+import { accountLabel, type AccountView, type LoginStep } from "./api";
 import { $, esc, fragment, leave } from "./dom";
 import { t, type MessageKey } from "./i18n";
 import { icon } from "./icons";
@@ -64,7 +64,7 @@ export function openLoginOverlay(options: {
           <div class="login-emblem">${emblem(options.tier, 104)}</div>
         </div>
         <h2 class="login-title">${esc(t("login.title"))}</h2>
-        <p class="login-account">${esc(options.account.name)}</p>
+        <p class="login-account">${esc(accountLabel(options.account))}</p>
         <div class="login-progress"><span></span></div>
         <ol class="login-steps">
           ${steps

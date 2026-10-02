@@ -1,6 +1,6 @@
 // Development-only stand-in for the Tauri backend, used when the UI is opened
 // in a plain browser (`npm run dev`). Never bundled into release builds.
-import { api, events, keyId, type AccountView, type Key, type RefreshDone } from "./api";
+import { api, events, keyId, parseAccountLine, type AccountView, type Key, type NewAccount, type RefreshDone } from "./api";
 
 const lol = (tier: string, division: string, lp: string, finished = "Gold II", reached = finished) => ({
   tier,
@@ -60,7 +60,7 @@ export function installMock(): void {
     listeners.pending.forEach((handler) => handler(targets.map((account) => ({ accountId: account.accountId, region: account.region }))));
     targets.forEach((account, index) => {
       setTimeout(() => {
-        listeners.update.forEach((handler) => handler(account));
+        if (find(account)?.name === account.name) listeners.update.forEach((handler) => handler(account));
         if (index === targets.length - 1) listeners.done.forEach((handler) => handler({ error: null, exclusive, auto: false }));
       }, 500 + index * 260);
     });
@@ -95,10 +95,10 @@ export function installMock(): void {
     }),
     openRelease: async () => {},
     listAccounts: async () => accounts,
-    addAccount: async (input: { accountId: string; name: string; region: string; description: string }) => {
+    addAccount: async (input: NewAccount) => {
       const account: AccountView = {
         accountId: input.accountId,
-        name: input.name,
+        name: input.name.trim(),
         region: input.region.toLowerCase(),
         regionDisplay: input.region,
         description: input.description,
@@ -108,13 +108,33 @@ export function installMock(): void {
         tft: tft("Unranked", "", "", "N/A"),
       };
       accounts.push(account);
-      setTimeout(() => fakeFetch([{ ...account, level: "30", lol: lol("Silver", "II", "45", "Bronze I") }]), 50);
+      if (account.name) setTimeout(() => fakeFetch([{ ...account, level: "30", lol: lol("Silver", "II", "45", "Bronze I") }]), 50);
       return account;
     },
-    multiAdd: async () => ({ added: 0, skipped: 1 }),
+    multiAdd: async (text: string, region: string) => {
+      let added = 0;
+      let skipped = 0;
+      for (const line of text.split("\n").filter((line) => line.trim())) {
+        const input = parseAccountLine(line);
+        if (!input || accounts.some((account) => account.accountId.toLowerCase() === input.accountId.toLowerCase() && account.region === region.toLowerCase())) {
+          skipped++;
+          continue;
+        }
+        await api.addAccount({ ...input, region, description: "" });
+        added++;
+      }
+      return { added, skipped };
+    },
     updateAccount: async (key: Key, name: string, description: string) => {
       const account = find(key)!;
+      name = name.trim();
+      const renamed = account.name !== name;
       Object.assign(account, { name, description });
+      if (renamed) {
+        Object.assign(account, { level: "", lol: lol("Unranked", "", "", "N/A"), tft: tft("Unranked", "", "", "N/A") });
+        const updated = name ? { ...account, level: "30", lol: lol("Silver", "II", "45", "Bronze I") } : { ...account };
+        setTimeout(() => fakeFetch([updated]), 50);
+      }
       return account;
     },
     deleteAccount: async (key: Key) => {

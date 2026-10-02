@@ -2,6 +2,18 @@ use leagueaccounts::rank_fetcher::RankFetcher;
 use scraper::Html;
 
 #[test]
+fn missing_riot_id_does_not_attempt_a_profile_lookup() {
+    let account = leagueaccounts::models::Account {
+        name: "   ".into(),
+        ..Default::default()
+    };
+    assert_eq!(
+        RankFetcher::default().fetch_rank(&account),
+        leagueaccounts::models::RankInfo::unranked()
+    );
+}
+
+#[test]
 fn original_multiline_python_level_fixture_still_parses() {
     let html = r#"
         <html>

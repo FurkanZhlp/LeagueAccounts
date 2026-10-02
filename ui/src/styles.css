@@ -911,6 +911,24 @@ select option {
   justify-content: space-between;
   gap: 10px;
 }
+.rank-notice {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+.rank-edit {
+  display: block;
+  margin-top: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font-size: 12px;
+  cursor: pointer;
+}
+.rank-edit:hover {
+  text-decoration: underline;
+}
 .rank-name {
   font-size: 17px;
   font-weight: 700;
