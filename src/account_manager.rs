@@ -204,12 +204,18 @@ impl AccountManager {
                 },
                 tft: item.tft,
             };
-            if !account.password.is_empty() {
-                let _ = credentials::set_password(
+            // An account whose password could not be stored would silently
+            // lose it on the next launch, so it is skipped instead.
+            if !account.password.is_empty()
+                && credentials::set_password(
                     KEYRING_SERVICE,
                     &format!("{region}:{account_id}"),
                     &account.password,
-                );
+                )
+                .is_err()
+            {
+                skipped += 1;
+                continue;
             }
             self.accounts.push(account);
             added += 1;
