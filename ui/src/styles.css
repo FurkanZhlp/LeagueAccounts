@@ -651,16 +651,60 @@ body.ready .shell {
   color: var(--faint);
   white-space: nowrap;
 }
+select,
+select::picker(select) {
+  appearance: base-select;
+}
 select {
-  appearance: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   height: 30px;
-  padding: 0 26px 0 8px;
+  padding: 0 8px;
   border: 0;
   border-radius: 8px;
   outline: 0;
-  background: transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238e97ab' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 8px center;
+  background: transparent;
   font-weight: 500;
   cursor: pointer;
+}
+select::picker-icon {
+  content: "";
+  flex: none;
+  width: 12px;
+  height: 12px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238e97ab' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+  transition: transform 0.18s var(--ease);
+}
+select:open::picker-icon {
+  transform: rotate(180deg);
+}
+select::picker(select) {
+  margin-block: 6px;
+  min-width: anchor-size(width);
+  max-height: min(320px, calc(100dvh - 16px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  opacity: 0;
+  transform: scale(0.94) translateY(-4px);
+  transition:
+    opacity 0.18s var(--ease),
+    transform 0.18s var(--ease),
+    display 0.18s allow-discrete,
+    overlay 0.18s allow-discrete;
+}
+select:open::picker(select) {
+  opacity: 1;
+  transform: none;
+}
+#friend-tier::picker(select) {
+  max-height: min(360px, calc(100dvh - 16px));
+}
+@starting-style {
+  select:open::picker(select) {
+    opacity: 0;
+    transform: scale(0.94) translateY(-4px);
+  }
 }
 .select-wrap.full select {
   flex: 1;
@@ -673,8 +717,31 @@ select:disabled {
   cursor: default;
 }
 select option {
-  background: var(--panel-solid);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: transparent;
   color: var(--text);
+  font-weight: 400;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+select option:hover,
+select option:focus-visible {
+  background: rgba(255, 255, 255, 0.07);
+  outline: 0;
+}
+select option:checked {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  font-weight: 600;
+}
+select option::checkmark {
+  order: 1;
+  margin-left: auto;
+  color: var(--accent);
 }
 
 .view-toggle {
@@ -910,6 +977,27 @@ select option {
   align-items: baseline;
   justify-content: space-between;
   gap: 10px;
+}
+.rank-notice {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+.rank-not-found {
+  color: var(--danger);
+}
+.rank-edit {
+  display: block;
+  margin-top: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font-size: 12px;
+  cursor: pointer;
+}
+.rank-edit:hover {
+  text-decoration: underline;
 }
 .rank-name {
   font-size: 17px;
@@ -1483,10 +1571,8 @@ select option {
 
 /* ------------------------------------------------------------------ menu */
 
-.menu {
-  position: fixed;
-  z-index: 60;
-  min-width: 220px;
+.menu,
+select::picker(select) {
   padding: 6px;
   border-radius: 13px;
   background: rgba(20, 25, 38, 0.97);
@@ -1494,6 +1580,11 @@ select option {
   border: 1px solid var(--line-2);
   box-shadow: 0 24px 60px -12px rgba(0, 0, 0, 0.7);
   transform-origin: top left;
+}
+.menu {
+  position: fixed;
+  z-index: 60;
+  min-width: 220px;
   animation: menu-in 0.18s var(--ease) both;
 }
 .menu.menu-out {
@@ -1675,5 +1766,9 @@ select option {
   }
   .orb {
     display: none;
+  }
+  select::picker(select),
+  select::picker-icon {
+    transition: none;
   }
 }

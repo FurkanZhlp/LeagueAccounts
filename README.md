@@ -61,15 +61,20 @@ Click **Add account** (or press `Ctrl+N`) and fill in:
 | Field | What to enter |
 |---|---|
 | **Account ID** | The username you type into the Riot Client login screen |
-| **Riot ID** | Your in-game name with tag, e.g. `Hide on bush#KR1` (used to look up ranks on OP.GG) |
+| **Riot ID** | Optional in-game name with tag, e.g. `Hide on bush#KR1` (used to look up ranks on OP.GG) |
 | **Region** | The account's server |
 | **Password** | Stored only in Windows Credential Manager |
+
+If you don't remember the Riot ID, leave it blank. You can still log in with one click. The card shows **No Riot ID associated** and an **Add Riot ID** action when you want to fetch ranks later.
+
+If a saved Riot ID can no longer be found on OP.GG, the card shows **Riot ID not found on OP.GG** and **Update Riot ID**. Enter the new `GameName#TAG` to fetch ranks again. Login still uses the saved username and password.
 
 To add several accounts at once, open the **Bulk add** tab and paste one account per line:
 
 ```text
 username1--Player One#EUW--password1
 username2--Player Two#TR1--password2
+username3----password3
 ```
 
 Ranks are fetched right after adding. Use **Refresh ranks** (`Ctrl+R`) at any time.

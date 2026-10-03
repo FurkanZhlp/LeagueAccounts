@@ -1,6 +1,16 @@
 // Development-only stand-in for the Tauri backend, used when the UI is opened
 // in a plain browser (`npm run dev`). Never bundled into release builds.
-import { api, events, keyId, type AccountView, type HistoryPoint, type Key, type RefreshDone } from "./api";
+import {
+  api,
+  events,
+  keyId,
+  parseAccountLine,
+  type AccountView,
+  type HistoryPoint,
+  type Key,
+  type NewAccount,
+  type RefreshDone,
+} from "./api";
 
 const LADDER = ["Iron", "Bronze", "Silver", "Gold", "Platinum", "Emerald", "Diamond"];
 const DIVS = ["IV", "III", "II", "I"];
@@ -55,6 +65,7 @@ const sample: AccountView[] = [
 ].map(([accountId, name, regionDisplay, level, description, lolRank, tftRank]) => ({
   accountId: accountId as string,
   name: name as string,
+  riotIdNotFound: false,
   region: (regionDisplay as string).toLowerCase(),
   regionDisplay: regionDisplay as string,
   level: level as string,
@@ -99,7 +110,11 @@ export function installMock(): void {
     listeners.pending.forEach((handler) => handler(targets.map((account) => ({ accountId: account.accountId, region: account.region }))));
     targets.forEach((account, index) => {
       setTimeout(() => {
-        listeners.update.forEach((handler) => handler(account));
+        const stored = find(account);
+        if (stored?.name === account.name) {
+          Object.assign(stored, account);
+          listeners.update.forEach((handler) => handler(stored));
+        }
         if (index === targets.length - 1) listeners.done.forEach((handler) => handler({ error: null, exclusive, auto: false }));
       }, 500 + index * 260);
     });
@@ -109,7 +124,7 @@ export function installMock(): void {
     bootstrap: async () => ({
       accounts,
       regions: ["EUW", "EUNE", "NA", "KR", "TR", "BR"],
-      version: "3.1.0",
+      version: "3.2.0",
       loggingAvailable: true,
       loadError: null,
       settings,
@@ -137,14 +152,15 @@ export function installMock(): void {
     checkUpdate: async () => ({
       current: "3.0.0",
       newer: true,
-      latest: { version: "3.1.0", name: "v3.1.0", url: "https://github.com/", notes: "", publishedAt: "" },
+      latest: { version: "3.2.0", name: "v3.1.0", url: "https://github.com/", notes: "", publishedAt: "" },
     }),
     openRelease: async () => {},
     listAccounts: async () => accounts,
-    addAccount: async (input: { accountId: string; name: string; region: string; description: string }) => {
+    addAccount: async (input: NewAccount) => {
       const account: AccountView = {
         accountId: input.accountId,
-        name: input.name,
+        name: input.name.trim(),
+        riotIdNotFound: false,
         region: input.region.toLowerCase(),
         regionDisplay: input.region,
         description: input.description,
@@ -155,13 +171,33 @@ export function installMock(): void {
         trend: { lol: [], tft: [] },
       };
       accounts.push(account);
-      setTimeout(() => fakeFetch([{ ...account, level: "30", lol: lol("Silver", "II", "45", "Bronze I") }]), 50);
+      if (account.name) setTimeout(() => fakeFetch([{ ...account, level: "30", lol: lol("Silver", "II", "45", "Bronze I") }]), 50);
       return account;
     },
-    multiAdd: async () => ({ added: 0, skipped: 1 }),
+    multiAdd: async (text: string, region: string) => {
+      let added = 0;
+      let skipped = 0;
+      for (const line of text.split("\n").filter((line) => line.trim())) {
+        const input = parseAccountLine(line);
+        if (!input || accounts.some((account) => account.accountId.toLowerCase() === input.accountId.toLowerCase() && account.region === region.toLowerCase())) {
+          skipped++;
+          continue;
+        }
+        await api.addAccount({ ...input, region, description: "" });
+        added++;
+      }
+      return { added, skipped };
+    },
     updateAccount: async (key: Key, name: string, description: string) => {
       const account = find(key)!;
+      name = name.trim();
+      const renamed = account.name !== name;
       Object.assign(account, { name, description });
+      if (renamed) {
+        Object.assign(account, { riotIdNotFound: false, level: "", lol: lol("Unranked", "", "", "N/A"), tft: tft("Unranked", "", "", "N/A") });
+        const updated = name ? { ...account, level: "30", lol: lol("Silver", "II", "45", "Bronze I") } : { ...account };
+        setTimeout(() => fakeFetch([updated]), 50);
+      }
       return account;
     },
     deleteAccount: async (key: Key) => {

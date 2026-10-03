@@ -1,7 +1,7 @@
 // Full-screen sign-in progress: shows each step reported by the backend
 // ("login-step" events) as it happens.
 
-import type { AccountView, LoginStep } from "./api";
+import { accountLabel, type AccountView, type LoginStep } from "./api";
 import { $, esc, fragment, leave } from "./dom";
 import { t, type MessageKey } from "./i18n";
 import { icon } from "./icons";
@@ -57,14 +57,14 @@ export function openLoginOverlay(options: {
     step === "focus" && !options.viaRiot ? t("login.step.focusPrevious") : t(LABELS[step]);
 
   const overlay = fragment(`
-    <div class="login-overlay" role="dialog" aria-modal="true" aria-live="polite">
+    <div class="login-overlay" role="dialog" aria-modal="true" aria-live="polite" tabindex="-1">
       <div class="login-stage">
         <div class="login-orbit">
           <span class="ring ring-1"></span><span class="ring ring-2"></span><span class="ring ring-3"></span>
           <div class="login-emblem">${emblem(options.tier, 104)}</div>
         </div>
         <h2 class="login-title">${esc(t("login.title"))}</h2>
-        <p class="login-account">${esc(options.account.name)}</p>
+        <p class="login-account">${esc(accountLabel(options.account))}</p>
         <div class="login-progress"><span></span></div>
         <ol class="login-steps">
           ${steps
@@ -169,6 +169,13 @@ export function openLoginOverlay(options: {
   };
 
   const onKey = (event: KeyboardEvent) => {
+    if (event.key === "Tab") {
+      event.preventDefault();
+      event.stopPropagation();
+      const button = overlay.querySelector<HTMLButtonElement>("button:not([hidden]):not(:disabled)");
+      (button ?? overlay).focus();
+      return;
+    }
     if (event.key !== "Escape") return;
     event.stopPropagation();
     if ($('[data-login="close"]', overlay).hidden) options.onCancel();
@@ -180,6 +187,7 @@ export function openLoginOverlay(options: {
     options.onCancel();
   });
   $('[data-login="close"]', overlay).addEventListener("click", () => api.close());
+  $('[data-login="cancel"]', overlay).focus();
   render();
   return api;
 }

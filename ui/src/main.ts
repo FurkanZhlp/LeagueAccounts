@@ -4,7 +4,7 @@ import "./styles.css";
 import "./features.css";
 import "./login.css";
 
-import { ApiError, api, events, keyId, keyOf, type AccountView, type Key, type Release, type Schedule, type Settings } from "./api";
+import { ApiError, accountLabel, api, events, keyId, keyOf, parseAccountLine, type AccountView, type Key, type Release, type Schedule, type Settings } from "./api";
 import { openLoginOverlay, type LoginOverlay } from "./login";
 import { deltaBadge, historySummary, recentDelta, renderHistoryChart, sparkline, type Range } from "./chart";
 import { LANGUAGES, applyStatic, errorText, lang, localizeRank, setLang, t, tierName, type Lang, type MessageKey } from "./i18n";
@@ -96,7 +96,7 @@ function visibleAccounts(): AccountView[] {
     }
     return true;
   });
-  const byName = (a: AccountView, b: AccountView) => a.name.localeCompare(b.name, "tr");
+  const byName = (a: AccountView, b: AccountView) => accountLabel(a).localeCompare(accountLabel(b), "tr");
   const sorters: Record<Sort, (a: AccountView, b: AccountView) => number> = {
     rank: (a, b) => compareRanks(rankOf(a, state.mode), rankOf(b, state.mode)) || byName(a, b),
     name: byName,
@@ -123,14 +123,14 @@ function cardSignature(account: AccountView, pending: boolean): string {
 function cardInner(account: AccountView, pending: boolean): string {
   const rank = rankOf(account, state.mode);
   const tier = normalizeTier(rank.tier);
-  const [gameName, tag] = splitRiotId(account.name);
+  const [gameName, tag] = splitRiotId(accountLabel(account));
   const lp = isRanked(rank) && rank.lp ? `<span class="lp">${esc(rank.lp)} LP</span>` : "";
   return `
     <div class="card-sheen"></div>
     <div class="card-top">
       <div class="emblem-wrap">${emblem(tier, 58)}</div>
       <div class="identity">
-        <div class="name" title="${esc(account.name)}">
+        <div class="name" title="${esc(accountLabel(account))}">
           <span class="game-name">${esc(gameName)}</span>${tag ? `<span class="tag">#${esc(tag)}</span>` : ""}
         </div>
         <div class="meta">
@@ -142,12 +142,15 @@ function cardInner(account: AccountView, pending: boolean): string {
       <button class="icon-btn card-more" data-act="menu" title="${esc(t("card.more"))}">${icon("more")}</button>
     </div>
     <div class="rank-block${pending ? " is-pending" : ""}">
+      ${!account.name || account.riotIdNotFound ? `
+      <div class="rank-notice${account.riotIdNotFound ? " rank-not-found" : ""}">${esc(t(account.name ? "card.riotIdNotFound" : "card.noRiotId"))}</div>
+      <button class="rank-edit" data-act="edit">${esc(t(account.name ? "card.updateRiotId" : "card.addRiotId"))}</button>` : `
       <div class="rank-line">
         <span class="rank-name">${esc(rankLabel(rank))}</span>${lp}
       </div>
       <div class="lp-bar${APEX.has(tier) ? " apex" : ""}"><span style="--p:${lpProgress(rank)}"></span></div>
       <div class="history">${historyLine(account)}</div>
-      <div class="trend">${sparkline(account.trend[state.mode])}${deltaBadge(recentDelta(account.trend[state.mode]))}</div>
+      <div class="trend">${sparkline(account.trend[state.mode])}${deltaBadge(recentDelta(account.trend[state.mode]))}</div>`}
     </div>
     ${account.description ? `<p class="desc" title="${esc(account.description)}">${esc(account.description)}</p>` : `<p class="desc desc-empty"></p>`}
     <div class="card-actions">
@@ -338,7 +341,7 @@ async function confirmCloseLeague(account: AccountView, inGame: boolean): Promis
   const answer = await modal({
     title: t(inGame ? "login.inGameTitle" : "login.closeTitle"),
     body: `<div class="warning${inGame ? " danger" : ""}">${icon("alert", 18)}<p>${esc(
-      t(inGame ? "login.inGameText" : "login.closeText", { name: account.name }),
+      t(inGame ? "login.inGameText" : "login.closeText", { name: accountLabel(account) }),
     )}</p></div>`,
     actions: [
       { label: t("common.cancel"), value: "cancel" },
@@ -387,17 +390,17 @@ async function runLogin(account: AccountView, switchAccount = false, closeRunnin
   try {
     const result = await api.login(key, state.mode === "tft", switchAccount, closeRunning);
     if (result === "signedIn") {
-      overlay.succeed(t("login.success"), launching ? t("toast.launchingGame") : account.name);
+      overlay.succeed(t("login.success"), launching ? t("toast.launchingGame") : accountLabel(account));
     } else if (result === "alreadySignedIn") {
-      overlay.succeed(t("toast.alreadySignedIn"), launching ? t("toast.launchingGame") : account.name);
+      overlay.succeed(t("toast.alreadySignedIn"), launching ? t("toast.launchingGame") : accountLabel(account));
     } else if (result === "typed") {
       if (viaRiot) overlay.finishInClient();
-      else overlay.succeed(t("toast.loggedIn"), account.name);
+      else overlay.succeed(t("toast.loggedIn"), accountLabel(account));
     } else if (result === "otherAccount") {
       overlay.close();
       const answer = await modal({
         title: t("login.switchTitle"),
-        body: `<p class="hint">${esc(t("login.switchText", { name: account.name }))}</p>`,
+        body: `<p class="hint">${esc(t("login.switchText", { name: accountLabel(account) }))}</p>`,
         actions: [
           { label: t("common.cancel"), value: "cancel" },
           { label: t("login.switchConfirm"), value: "switch", kind: "primary" },
@@ -437,7 +440,7 @@ async function editAccount(account: AccountView): Promise<void> {
   await modal({
     title: t("edit.title"),
     body: `
-      <label class="field"><span>${t("edit.riotId")}</span>
+      <label class="field"><span>${t("edit.riotId")} <em>${t("add.optional")}</em></span>
         <input name="name" value="${esc(account.name)}" placeholder="${esc(t("add.riotIdPh"))}" spellcheck="false" /></label>
       <label class="field"><span>${t("edit.description")}</span>
         <input name="description" value="${esc(account.description)}" placeholder="${esc(t("edit.descriptionPh"))}" /></label>
@@ -466,7 +469,7 @@ async function deleteAccount(account: AccountView): Promise<void> {
     body: `
       <div class="confirm-account">
         ${emblem(rankOf(account, state.mode).tier, 44)}
-        <div><strong>${esc(account.name)}</strong><span>${esc(account.accountId)} · ${esc(account.regionDisplay)}</span></div>
+        <div><strong>${esc(accountLabel(account))}</strong><span>${esc(account.accountId)} · ${esc(account.regionDisplay)}</span></div>
       </div>
       <p class="hint">${t("delete.hint")}</p>`,
     actions: [
@@ -482,18 +485,17 @@ async function deleteAccount(account: AccountView): Promise<void> {
   state.accounts = state.accounts.filter((candidate) => keyId(keyOf(candidate)) !== id);
   if (state.selected === id) state.selected = null;
   render();
-  toast("success", t("toast.deleted"), account.name);
+  toast("success", t("toast.deleted"), accountLabel(account));
 }
 
 function openMenu(account: AccountView, x: number, y: number): void {
   select(keyId(keyOf(account)));
   contextMenu(x, y, [
-    {
+    ...(account.name ? [{
       label: t(state.mode === "lol" ? "menu.opgg" : "menu.opggTft"),
       icon: "external-link",
       run: () => void guard(() => api.openProfile(keyOf(account), state.mode === "tft"), "toast.openFailed"),
-    },
-    { label: t("menu.chart"), icon: "chart", run: () => void openChart(account) },
+    }, { label: t("menu.chart"), icon: "chart", run: () => void openChart(account) }] : []),
     { label: t("menu.edit"), icon: "pencil", run: () => void editAccount(account) },
     "sep",
     { label: t("menu.delete"), icon: "trash", danger: true, hint: "Del", run: () => void deleteAccount(account) },
@@ -789,7 +791,7 @@ function openAddDrawer(tab: "single" | "multi" = "single"): void {
           <form class="tab-panel" data-panel="single" novalidate>
             <label class="field"><span>${t("add.accountId")}</span>
               <input name="accountId" autocomplete="off" spellcheck="false" placeholder="${esc(t("add.accountIdPh"))}" /></label>
-            <label class="field"><span>${t("edit.riotId")}</span>
+            <label class="field"><span>${t("edit.riotId")} <em>${t("add.optional")}</em></span>
               <input name="name" autocomplete="off" spellcheck="false" placeholder="${esc(t("add.riotIdPh"))}" /></label>
             <div class="field-row">
               <label class="field"><span>${t("add.region")}</span><div class="select-wrap full"><select name="region">${regionOptions}</select></div></label>
@@ -856,7 +858,7 @@ function openAddDrawer(tab: "single" | "multi" = "single"): void {
   const counter = $(".multi-count", overlay);
   textarea.addEventListener("input", () => {
     const lines = textarea.value.split("\n").filter((line) => line.trim());
-    const valid = lines.filter((line) => line.split(line.includes("---") ? "---" : "--").length === 3);
+    const valid = lines.filter((line) => parseAccountLine(line));
     counter.textContent = lines.length ? t("add.multiCount", { valid: valid.length, total: lines.length }) : "";
   });
 
@@ -865,7 +867,7 @@ function openAddDrawer(tab: "single" | "multi" = "single"): void {
     event.preventDefault();
     const data = new FormData(single);
     const value = (name: string) => String(data.get(name) ?? "");
-    const missing = ["accountId", "name", "password"].filter((name) => !value(name).trim());
+    const missing = ["accountId", "password"].filter((name) => !value(name).trim());
     single.querySelectorAll("input").forEach((input) => input.classList.toggle("invalid", missing.includes(input.name)));
     if (missing.length) {
       shake(drawer);
@@ -893,7 +895,7 @@ function openAddDrawer(tab: "single" | "multi" = "single"): void {
     single.reset();
     $<HTMLSelectElement>('[name="region"]', single).value = lastRegion();
     $<HTMLInputElement>('[name="accountId"]', single).focus();
-    toast("success", t("toast.added"), t("toast.addedText", { name: added.name }));
+    toast("success", t("toast.added"), added.name ? t("toast.addedText", { name: added.name }) : added.accountId);
   });
 
   const multi = $<HTMLFormElement>('[data-panel="multi"]', overlay);
@@ -1122,6 +1124,7 @@ function wire(): void {
       const rect = (event.target as HTMLElement).closest("button")!.getBoundingClientRect();
       openMenu(account, rect.left, rect.bottom + 6);
     }
+    if (action === "edit") void editAccount(account);
   });
   accounts.addEventListener("dblclick", (event) => {
     if ((event.target as HTMLElement).closest("button")) return;
@@ -1202,7 +1205,7 @@ function moveSelection(step: number, columns: boolean): void {
 function onKeyDown(event: KeyboardEvent): void {
   const target = event.target as HTMLElement;
   const typing = target.matches("input, textarea, select");
-  const overlayOpen = Boolean(document.querySelector(".overlay, .drawer-overlay"));
+  const overlayOpen = Boolean(document.querySelector(".overlay, .drawer-overlay, .login-overlay"));
   const ctrl = event.ctrlKey || event.metaKey;
   const key = event.key.toLowerCase();
 

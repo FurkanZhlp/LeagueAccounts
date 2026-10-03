@@ -103,6 +103,7 @@ export type LoginResult = "signedIn" | "typed" | "alreadySignedIn" | "otherAccou
 export interface AccountView {
   accountId: string;
   name: string;
+  riotIdNotFound: boolean;
   region: string;
   regionDisplay: string;
   description: string;
@@ -112,6 +113,8 @@ export interface AccountView {
   tft: TftRank;
   trend: Trend;
 }
+
+export const accountLabel = (account: AccountView): string => account.name || account.accountId;
 
 /** Backend failure: a stable code the UI translates, plus optional detail. */
 export interface ErrorPayload {
@@ -161,6 +164,15 @@ export interface NewAccount {
   region: string;
   password: string;
   description: string;
+}
+
+export function parseAccountLine(line: string): Pick<NewAccount, "accountId" | "name" | "password"> | undefined {
+  for (const separator of ["---", "--"]) {
+    const parts = line.split(separator).map((part) => part.trim());
+    if (parts.length === 3 && parts[0] && parts[2]) {
+      return { accountId: parts[0], name: parts[1], password: parts[2] };
+    }
+  }
 }
 
 export const keyOf = (account: AccountView): Key => ({

@@ -13,10 +13,12 @@ use leagueaccounts::autotype::auto_type_credentials;
 use leagueaccounts::credentials;
 use leagueaccounts::history::RankHistory;
 use leagueaccounts::logging::{self, Event, Reason};
-use leagueaccounts::models::{Account, AccountKey};
+use leagueaccounts::models::{Account, AccountKey, RankInfo};
 use leagueaccounts::rank_fetcher::{RankFetcher, RankProvider};
 use leagueaccounts::riot_client::{self, Game, LoginOutcome, LoginStep};
-use leagueaccounts::utils::{app_data_dir, history_file, region_from_display, settings_file, REGION_MAP};
+use leagueaccounts::utils::{
+    app_data_dir, history_file, parse_account_line, region_from_display, settings_file, REGION_MAP,
+};
 use leagueaccounts::AccountManager;
 use leagueaccounts::updates::{self, Release};
 use refresh::{
@@ -81,6 +83,7 @@ struct Bootstrap {
 #[serde(rename_all = "camelCase")]
 struct NewAccount {
     account_id: String,
+    #[serde(default)]
     name: String,
     region: String,
     password: String,
@@ -177,7 +180,7 @@ fn add_account(app: AppHandle, state: AppState<'_>, input: NewAccount) -> Comman
     let account_id = input.account_id.trim().to_owned();
     let name = input.name.trim().to_owned();
     let password = input.password.trim().to_owned();
-    if account_id.is_empty() || name.is_empty() || password.is_empty() {
+    if account_id.is_empty() || password.is_empty() {
         return Err(fail("required_fields"));
     }
     let region_label = input.region.trim().to_owned();
@@ -222,23 +225,14 @@ fn multi_add(app: AppHandle, state: AppState<'_>, text: String, region: String) 
     {
         let mut manager = manager(&state)?;
         for line in text.lines().map(str::trim).filter(|line| !line.is_empty()) {
-            let parts: Vec<&str> = if line.contains("---") {
-                line.split("---").collect()
-            } else {
-                line.split("--").collect()
-            };
-            let [account_id, name, password] = parts[..] else {
+            let Some((account_id, name, password)) = parse_account_line(line) else {
                 skipped += 1;
                 continue;
             };
-            let (account_id, name, password) = (account_id.trim(), name.trim(), password.trim());
             let duplicate = |account: &Account| {
                 account.account_id.eq_ignore_ascii_case(account_id) && account.region == region
             };
-            if account_id.is_empty()
-                || name.is_empty()
-                || password.is_empty()
-                || manager.accounts.iter().any(duplicate)
+            if manager.accounts.iter().any(duplicate)
                 || credentials::set_password(KEYRING_SERVICE, &format!("{region}:{account_id}"), password)
                     .is_err()
             {
@@ -278,14 +272,15 @@ fn update_account(
 ) -> CommandResult<AccountView> {
     let key = AccountKey::from(key);
     let name = name.trim().to_owned();
-    if name.is_empty() {
-        return Err(fail("name_empty"));
-    }
     let (updated, renamed) = {
         let mut manager = manager(&state)?;
         let account = manager.account_mut(&key).ok_or_else(|| fail("not_found"))?;
         let renamed = account.name != name;
         account.name = name;
+        if renamed {
+            account.riot_id_not_found = false;
+            RankInfo::unranked().apply_to(account);
+        }
         account.description = description.trim().to_owned();
         let updated = account.clone();
         manager
@@ -564,6 +559,9 @@ async fn import_data(state: AppState<'_>, title: String) -> CommandResult<Option
 #[tauri::command]
 fn open_profile(state: AppState<'_>, key: Key, tft: bool) -> CommandResult<()> {
     let account = find_account(&state, key)?;
+    if account.name.is_empty() {
+        return Err(fail("riot_id_missing"));
+    }
     let fetcher = RankFetcher::default();
     let url = if tft {
         fetcher.build_opgg_tft_url(&account.region, &account.name)
