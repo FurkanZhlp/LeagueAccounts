@@ -3,6 +3,7 @@ use crate::models::{Account, RankInfo, TftRank};
 use html_escape::decode_html_entities;
 use regex::Regex;
 use scraper::{Html, Selector};
+use std::sync::LazyLock;
 use std::time::Duration;
 
 /// Provider abstraction used by the manager and by deterministic tests.
@@ -73,9 +74,10 @@ impl RankFetcher {
     /// The page embeds the current set as the first `"entry":{...}` object and
     /// every earlier set as `{"setName":"TFTSetN","entry":{...}}`, newest first.
     pub fn parse_tft_from_opgg(&self, decoded_payload: &str) -> TftRank {
-        let entry = Regex::new(r#""entry"\s*:\s*"#).expect("valid TFT entry regex");
-        let set_name =
-            Regex::new(r#""setName"\s*:\s*"([^"]+)"\s*,\s*$"#).expect("valid TFT set regex");
+        static ENTRY_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#""entry"\s*:\s*"#).expect("valid TFT entry regex"));
+        let entry = &*ENTRY_RE;
+        static SET_NAME_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#""setName"\s*:\s*"([^"]+)"\s*,\s*$"#).expect("valid TFT set regex"));
+        let set_name = &*SET_NAME_RE;
         let mut current: Option<serde_json::Value> = None;
         let mut current_set = None;
         let mut last_set: Option<serde_json::Value> = None;
@@ -233,10 +235,10 @@ impl RankFetcher {
         }
 
         if tier == "Unranked" {
-            let re = Regex::new(
+            static RE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(
                 r#""tier_info":\{"lp":(?P<lp>\d+),"tier":"(?P<tier>[A-Z_]+)","label":"(?P<label>[^"]+)"\}"#,
-            )
-            .expect("valid OP.GG tier regex");
+            ).expect("valid OP.GG tier regex"));
+        let re = &*RE_RE;
             if let Some(captures) = re.captures_iter(decoded_payload).last() {
                 let label = captures
                     .name("label")
@@ -269,7 +271,8 @@ impl RankFetcher {
 
     pub fn parse_level_from_opgg(&self, soup: &Html, decoded_payload: &str) -> String {
         if let Some(description) = meta_description(soup) {
-            let re = Regex::new(r"\bLv\.\s*(\d+)\b").expect("valid level regex");
+            static RE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\bLv\.\s*(\d+)\b").expect("valid level regex"));
+        let re = &*RE_RE;
             if let Some(captures) = re.captures(&description) {
                 return captures
                     .get(1)
@@ -278,9 +281,8 @@ impl RankFetcher {
             }
         }
 
-        let profile_level =
-            Regex::new(r"(?s)profile_icons/profileIcon\d+\.jpg.{0,1200}?<span[^>]*>(\d+)</span>")
-                .expect("valid profile level regex");
+        static PROFILE_LEVEL_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?s)profile_icons/profileIcon\d+\.jpg.{0,1200}?<span[^>]*>(\d+)</span>").expect("valid profile level regex"));
+        let profile_level = &*PROFILE_LEVEL_RE;
         if let Some(captures) = profile_level.captures(decoded_payload) {
             return captures
                 .get(1)
@@ -288,9 +290,8 @@ impl RankFetcher {
                 .unwrap_or_default();
         }
 
-        let react_level =
-            Regex::new(r#"(?s)profile_icons/profileIcon\d+\.jpg.{0,1600}?"children":(\d+)"#)
-                .expect("valid react level regex");
+        static REACT_LEVEL_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"(?s)profile_icons/profileIcon\d+\.jpg.{0,1600}?"children":(\d+)"#).expect("valid react level regex"));
+        let react_level = &*REACT_LEVEL_RE;
         react_level
             .captures(decoded_payload)
             .and_then(|captures| captures.get(1))
@@ -299,7 +300,8 @@ impl RankFetcher {
     }
 
     pub fn parse_last_season_from_opgg(&self, decoded_payload: &str) -> (String, String) {
-        let history = Regex::new(r#""rank_entries"\s*:\s*"#).expect("valid history regex");
+        static HISTORY_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#""rank_entries"\s*:\s*"#).expect("valid history regex"));
+        let history = &*HISTORY_RE;
 
         for entry in history.find_iter(decoded_payload) {
             // Parse one complete season object from the surrounding React payload.
@@ -341,10 +343,10 @@ impl RankFetcher {
     }
 
     pub fn parse_rank_text(&self, text: &str) -> Option<(String, String, String)> {
-        let rank = Regex::new(
+        static RANK_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(
             r"(?i)\b(?P<tier>Challenger|Grandmaster|Master|Diamond|Emerald|Platinum|Gold|Silver|Bronze|Iron)\s*(?P<division>IV|III|II|I|[1-4])?\s+(?P<lp>[\d,]+)\s*LP\b",
-        )
-        .expect("valid rank regex");
+        ).expect("valid rank regex"));
+        let rank = &*RANK_RE;
         let captures = rank.captures(text)?;
         Some(
             self.normalize_rank(
@@ -402,7 +404,8 @@ impl RankFetcher {
     }
 
     pub fn division_from_label(&self, label: &str) -> String {
-        let re = Regex::new(r"\b[A-Z]+\s+([1-4])\b").expect("valid division regex");
+        static RE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b[A-Z]+\s+([1-4])\b").expect("valid division regex"));
+        let re = &*RE_RE;
         re.captures(label)
             .and_then(|captures| captures.get(1))
             .map(|value| value.as_str().to_owned())
@@ -414,10 +417,10 @@ impl RankFetcher {
         if tier_text.is_empty() {
             return String::new();
         }
-        let rank = Regex::new(
+        static RANK_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(
             r"(?i)^(?P<tier>Challenger|Grandmaster|Master|Diamond|Emerald|Platinum|Gold|Silver|Bronze|Iron)\s*(?P<division>IV|III|II|I|[1-4])?",
-        )
-        .expect("valid history rank regex");
+        ).expect("valid history rank regex"));
+        let rank = &*RANK_RE;
         let Some(captures) = rank.captures(tier_text) else {
             return title_case(tier_text);
         };
