@@ -57,7 +57,7 @@ pub fn type_credentials(account_id: &str, password: &str) -> bool {
 
         // arboard updates the process clipboard asynchronously on some
         // Windows versions; let each value become visible before Ctrl+V.
-        if clipboard.set_text(account_id.to_owned()).is_err() {
+        if set_private_text(&mut clipboard, account_id).is_err() {
             return false;
         }
         thread::sleep(Duration::from_millis(60));
@@ -72,7 +72,7 @@ pub fn type_credentials(account_id: &str, password: &str) -> bool {
         }
         if !password.is_empty() {
             thread::sleep(Duration::from_millis(60));
-            if clipboard.set_text(password.to_owned()).is_err() {
+            if set_private_text(&mut clipboard, password).is_err() {
                 return false;
             }
             thread::sleep(Duration::from_millis(60));
@@ -96,6 +96,14 @@ pub fn type_credentials(account_id: &str, password: &str) -> bool {
 {password}"))
             .is_ok()
     }
+}
+
+/// Put text on the clipboard without letting Windows record it in the
+/// clipboard history or the cloud clipboard.
+#[cfg(windows)]
+fn set_private_text(clipboard: &mut arboard::Clipboard, text: &str) -> Result<(), arboard::Error> {
+    use arboard::SetExtWindows;
+    clipboard.set().exclude_from_monitoring().text(text.to_owned())
 }
 
 #[cfg(windows)]
