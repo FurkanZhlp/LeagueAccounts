@@ -88,10 +88,13 @@ impl AccountManager {
         self.save_accounts()
     }
 
+    /// The stored password goes first: if it cannot be removed the account is
+    /// kept, so the failure is visible and can be retried instead of leaving
+    /// an orphaned credential behind.
     pub fn delete_account(&mut self, account_id: &str, region: &str) -> ManagerResult<()> {
+        credentials::delete_password(KEYRING_SERVICE, &format!("{region}:{account_id}"))?;
         self.accounts
             .retain(|account| !(account.account_id == account_id && account.region == region));
-        let _ = credentials::delete_password(KEYRING_SERVICE, &format!("{region}:{account_id}"));
         self.save_accounts()
     }
 
