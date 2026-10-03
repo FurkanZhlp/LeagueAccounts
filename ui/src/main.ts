@@ -913,14 +913,16 @@ function openAddDrawer(tab: "single" | "multi" = "single"): void {
     if (!result) return;
     state.accounts = await api.listAccounts();
     render();
-    textarea.value = "";
-    counter.textContent = "";
+    // Keep only the lines that were not added, so they can be fixed and resubmitted.
+    const inputLines = text.split("\n");
+    textarea.value = result.skippedLines.map((index) => inputLines[index]).join("\n");
+    textarea.dispatchEvent(new Event("input"));
     toast(
       result.added ? "success" : "info",
       t("toast.multiAdded", { count: result.added }),
       result.skipped ? t("toast.multiSkipped", { count: result.skipped }) : "",
     );
-    if (result.added) close();
+    if (result.added && !result.skipped) close();
   });
 }
 

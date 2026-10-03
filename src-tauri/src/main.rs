@@ -95,6 +95,8 @@ struct NewAccount {
 struct BatchResult {
     added: usize,
     skipped: usize,
+    /// Zero-based indices of the input lines that were not added (bulk add only).
+    skipped_lines: Vec<usize>,
 }
 
 fn manager(state: &Shared) -> CommandResult<MutexGuard<'_, AccountManager>> {
@@ -220,26 +222,31 @@ fn add_account(app: AppHandle, state: AppState<'_>, input: NewAccount) -> Comman
 fn multi_add(app: AppHandle, state: AppState<'_>, text: String, region: String) -> CommandResult<BatchResult> {
     let region_label = region.trim().to_owned();
     let region = region_from_display(&region_label).ok_or_else(|| fail("invalid_region"))?;
-    let mut added_accounts = Vec::new();
-    let mut skipped = 0;
+    let mut added_accounts: Vec<Account> = Vec::new();
+    let mut skipped_lines = Vec::new();
     {
         let mut manager = manager(&state)?;
-        for line in text.lines().map(str::trim).filter(|line| !line.is_empty()) {
+        for (index, line) in text.lines().enumerate() {
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
             let Some((account_id, name, password)) = parse_account_line(line) else {
-                skipped += 1;
+                skipped_lines.push(index);
                 continue;
             };
             let duplicate = |account: &Account| {
                 account.account_id.eq_ignore_ascii_case(account_id) && account.region == region
             };
             if manager.accounts.iter().any(duplicate)
+                || added_accounts.iter().any(duplicate)
                 || credentials::set_password(KEYRING_SERVICE, &format!("{region}:{account_id}"), password)
                     .is_err()
             {
-                skipped += 1;
+                skipped_lines.push(index);
                 continue;
             }
-            let account = Account {
+            added_accounts.push(Account {
                 account_id: account_id.to_owned(),
                 name: name.to_owned(),
                 region: region.to_owned(),
@@ -249,17 +256,22 @@ fn multi_add(app: AppHandle, state: AppState<'_>, text: String, region: String) 
                 reached_last_season: "N/A".to_owned(),
                 finished_last_season: "N/A".to_owned(),
                 ..Account::default()
-            };
-            if manager.add_account(account.clone()).is_ok() {
-                added_accounts.push(account);
-            } else {
-                skipped += 1;
+            });
+        }
+        if let Err(error) = manager.add_accounts(added_accounts.clone()) {
+            // Nothing was saved, so do not leave the new passwords behind.
+            for account in &added_accounts {
+                let _ = credentials::delete_password(
+                    KEYRING_SERVICE,
+                    &format!("{}:{}", account.region, account.account_id),
+                );
             }
+            return Err(fail_with("save_failed", error));
         }
     }
     let added = added_accounts.len();
     start_refresh(app, Arc::clone(&state), added_accounts, RefreshKind::Partial);
-    Ok(BatchResult { added, skipped })
+    Ok(BatchResult { added, skipped: skipped_lines.len(), skipped_lines })
 }
 
 #[tauri::command]
@@ -552,7 +564,7 @@ async fn import_data(state: AppState<'_>, title: String) -> CommandResult<Option
         logging::record(Event::ImportFailed, Reason::from_error(error.as_ref()));
         fail_with("import_failed", error)
     })?;
-    Ok(Some(BatchResult { added, skipped }))
+    Ok(Some(BatchResult { added, skipped, skipped_lines: Vec::new() }))
 }
 
 /// Open the account's OP.GG page (LoL or TFT) in the default browser.

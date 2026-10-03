@@ -88,6 +88,16 @@ impl AccountManager {
         self.save_accounts()
     }
 
+    /// Add several accounts with a single sort and a single write to disk.
+    pub fn add_accounts(&mut self, accounts: Vec<Account>) -> ManagerResult<()> {
+        if accounts.is_empty() {
+            return Ok(());
+        }
+        self.accounts.extend(accounts);
+        sort_accounts(&mut self.accounts);
+        self.save_accounts()
+    }
+
     /// The stored password goes first: if it cannot be removed the account is
     /// kept, so the failure is visible and can be retried instead of leaving
     /// an orphaned credential behind.

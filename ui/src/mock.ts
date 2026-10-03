@@ -176,17 +176,19 @@ export function installMock(): void {
     },
     multiAdd: async (text: string, region: string) => {
       let added = 0;
-      let skipped = 0;
-      for (const line of text.split("\n").filter((line) => line.trim())) {
+      const skippedLines: number[] = [];
+      const lines = text.split("\n");
+      for (const [index, line] of lines.entries()) {
+        if (!line.trim()) continue;
         const input = parseAccountLine(line);
         if (!input || accounts.some((account) => account.accountId.toLowerCase() === input.accountId.toLowerCase() && account.region === region.toLowerCase())) {
-          skipped++;
+          skippedLines.push(index);
           continue;
         }
         await api.addAccount({ ...input, region, description: "" });
         added++;
       }
-      return { added, skipped };
+      return { added, skipped: skippedLines.length, skippedLines };
     },
     updateAccount: async (key: Key, name: string, description: string) => {
       const account = find(key)!;
