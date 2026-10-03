@@ -16,7 +16,8 @@ use std::path::PathBuf;
 use std::thread;
 use std::time::{Duration, Instant};
 
-const LOGIN_TIMEOUT: Duration = Duration::from_secs(60);
+/// Covers a cold client start (possibly patching) plus the stability waits.
+const LOGIN_TIMEOUT: Duration = Duration::from_secs(120);
 /// After typing, how long to wait for sign-in (2FA or captcha may need the user).
 const SIGN_IN_TIMEOUT: Duration = Duration::from_secs(90);
 const SIGNED_OUT_STABLE: Duration = Duration::from_secs(4);
