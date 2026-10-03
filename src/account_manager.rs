@@ -76,7 +76,7 @@ impl AccountManager {
         let json = serde_json::to_string_pretty(&self.accounts).inspect_err(|error| {
             logging::record(Event::AccountsSaveFailed, Reason::from_error(error));
         })?;
-        std::fs::write(&self.accounts_file, json).inspect_err(|error| {
+        write_atomically(&self.accounts_file, json.as_bytes()).inspect_err(|error| {
             logging::record(Event::AccountsSaveFailed, Reason::from_error(error));
         })?;
         Ok(())
@@ -220,6 +220,28 @@ impl AccountManager {
         }
         Ok((added, skipped))
     }
+}
+
+/// Write to a sibling temp file, flush it to disk, then rename over the target,
+/// so a crash or power loss leaves either the old file or the new one, never a
+/// truncated or zero-filled mix.
+fn write_atomically(path: &std::path::Path, contents: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+
+    let mut temp = path.as_os_str().to_owned();
+    temp.push(".tmp");
+    let temp = PathBuf::from(temp);
+    let result = (|| {
+        let mut file = std::fs::File::create(&temp)?;
+        file.write_all(contents)?;
+        file.sync_all()?;
+        drop(file);
+        std::fs::rename(&temp, path)
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(&temp);
+    }
+    result
 }
 
 fn run_rank_jobs(
@@ -436,6 +458,31 @@ mod tests {
         });
         manager.save_accounts().unwrap();
         assert!(!std::fs::read_to_string(path).unwrap().contains("secret"));
+    }
+
+    #[test]
+    fn save_replaces_the_file_without_leaving_a_temp_file() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("accounts.json");
+        std::fs::write(&path, "stale").unwrap();
+        let provider = Arc::new(SlowProvider {
+            active: AtomicUsize::new(0),
+            max_active: AtomicUsize::new(0),
+        });
+        let mut manager = AccountManager::with_path(path.clone(), provider);
+        manager.accounts.push(Account {
+            account_id: "id".into(),
+            ..Account::default()
+        });
+        manager.save_accounts().unwrap();
+        let saved: Vec<Account> =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(saved.len(), 1);
+        let leftovers: Vec<_> = std::fs::read_dir(directory.path())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        assert_eq!(leftovers, [std::ffi::OsString::from("accounts.json")]);
     }
 
     #[test]
