@@ -79,6 +79,8 @@ username3----password3
 
 Ranks are fetched right after adding. Use **Refresh ranks** (`Ctrl+R`) at any time.
 
+Changed a password? Double-click the account (or choose **Edit** from the right-click menu) and fill in **New password**. Leave it empty to keep the stored one.
+
 ### Log in
 
 Press **Log in** on a card (or `Ctrl+Shift+V` with the account selected). League Accounts will:

@@ -201,8 +201,8 @@ export const api = {
   listAccounts: () => call<AccountView[]>("list_accounts"),
   addAccount: (input: NewAccount) => call<AccountView>("add_account", { input }),
   multiAdd: (text: string, region: string) => call<BatchResult>("multi_add", { text, region }),
-  updateAccount: (key: Key, name: string, description: string) =>
-    call<AccountView>("update_account", { key, name, description }),
+  updateAccount: (key: Key, name: string, description: string, password: string | null = null) =>
+    call<AccountView>("update_account", { key, name, description, password }),
   deleteAccount: (key: Key) => call<void>("delete_account", { key }),
   refreshRanks: () => call<number>("refresh_ranks"),
   copyAccountId: (key: Key) => call<void>("copy_account_id", { key }),

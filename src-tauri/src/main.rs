@@ -281,12 +281,26 @@ fn update_account(
     key: Key,
     name: String,
     description: String,
+    password: Option<String>,
 ) -> CommandResult<AccountView> {
     let key = AccountKey::from(key);
     let name = name.trim().to_owned();
+    // Empty or missing means "keep the stored password".
+    let password = password
+        .map(|password| password.trim().to_owned())
+        .filter(|password| !password.is_empty());
     let (updated, renamed) = {
         let mut manager = manager(&state)?;
         let account = manager.account_mut(&key).ok_or_else(|| fail("not_found"))?;
+        if let Some(password) = password {
+            credentials::set_password(
+                KEYRING_SERVICE,
+                &format!("{}:{}", account.region, account.account_id),
+                &password,
+            )
+            .map_err(|error| fail_with("password_save", error))?;
+            account.password = password;
+        }
         let renamed = account.name != name;
         account.name = name;
         if renamed {

@@ -124,7 +124,7 @@ export function installMock(): void {
     bootstrap: async () => ({
       accounts,
       regions: ["EUW", "EUNE", "NA", "KR", "TR", "BR"],
-      version: "3.2.0",
+      version: "3.3.0",
       loggingAvailable: true,
       loadError: null,
       settings,
@@ -152,7 +152,7 @@ export function installMock(): void {
     checkUpdate: async () => ({
       current: "3.0.0",
       newer: true,
-      latest: { version: "3.2.0", name: "v3.1.0", url: "https://github.com/", notes: "", publishedAt: "" },
+      latest: { version: "3.3.0", name: "v3.1.0", url: "https://github.com/", notes: "", publishedAt: "" },
     }),
     openRelease: async () => {},
     listAccounts: async () => accounts,
@@ -190,7 +190,7 @@ export function installMock(): void {
       }
       return { added, skipped: skippedLines.length, skippedLines };
     },
-    updateAccount: async (key: Key, name: string, description: string) => {
+    updateAccount: async (key: Key, name: string, description: string, _password?: string | null) => {
       const account = find(key)!;
       name = name.trim();
       const renamed = account.name !== name;

@@ -444,20 +444,38 @@ async function editAccount(account: AccountView): Promise<void> {
         <input name="name" value="${esc(account.name)}" placeholder="${esc(t("add.riotIdPh"))}" spellcheck="false" /></label>
       <label class="field"><span>${t("edit.description")}</span>
         <input name="description" value="${esc(account.description)}" placeholder="${esc(t("edit.descriptionPh"))}" /></label>
+      <label class="field"><span>${t("edit.password")} <em>${t("add.optional")}</em></span>
+        <div class="password">
+          <input name="password" type="password" autocomplete="new-password" placeholder="${esc(t("edit.passwordPh"))}" />
+          <button type="button" class="icon-btn" data-reveal title="${esc(t("add.show"))}">${icon("eye", 15)}</button>
+        </div></label>
       <p class="hint">${t("edit.hint")}</p>`,
     actions: [
       { label: t("common.cancel"), value: "cancel" },
       { label: t("common.save"), value: "save", kind: "primary" },
     ],
+    onOpen: (root) => {
+      const reveal = $("[data-reveal]", root);
+      reveal.addEventListener("click", () => {
+        const input = $<HTMLInputElement>('[name="password"]', root);
+        const hidden = input.type === "password";
+        input.type = hidden ? "text" : "password";
+        reveal.innerHTML = icon(hidden ? "eye-off" : "eye", 15);
+      });
+    },
     onSubmit: async (value, root) => {
       if (value !== "save") return true;
       const name = $<HTMLInputElement>('[name="name"]', root).value;
       const description = $<HTMLInputElement>('[name="description"]', root).value;
-      const updated = await guard(() => api.updateAccount(keyOf(account), name, description), "toast.saveFailed");
+      const password = $<HTMLInputElement>('[name="password"]', root).value;
+      const updated = await guard(
+        () => api.updateAccount(keyOf(account), name, description, password.trim() ? password : null),
+        "toast.saveFailed",
+      );
       if (!updated) return false;
       upsert(updated);
       render();
-      toast("success", t("toast.updated"));
+      toast("success", t(password.trim() ? "toast.passwordChanged" : "toast.updated"));
       return true;
     },
   });
