@@ -1,10 +1,11 @@
 {
   "name": "leagueaccounts-ui",
   "private": true,
-  "version": "3.0.2",
+  "version": "3.0.3",
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "test": "node --test tests/riot_renderer.test.mjs",
     "build": "tsc --noEmit && vite build",
     "tauri": "tauri",
     "screenshots": "node scripts/screenshots.mjs"

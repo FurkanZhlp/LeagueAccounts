@@ -86,15 +86,15 @@ Press **Log in** on a card (or `Ctrl+Shift+V` with the account selected). League
 
 1. Open the Riot Client.
 2. Wait until it is fully loaded and showing its login screen.
-3. Bring it to the front and enter your username and password.
+3. Submit your username and password through Riot's login form.
 4. Wait until the Riot Client confirms you are signed in, then launch the game.
 
 A full-screen progress view shows each step, and you can cancel at any time. For safety:
 
-- Credentials are only typed after the Riot Client reports that nobody is signed in and its login window is in front. If something doesn't look right, the login stops instead of typing elsewhere.
-- If another account is signed in, you are asked before it is signed out.
+- Credentials are submitted only after the Riot Client reports that nobody is signed in. This does not use the keyboard or require foreground focus.
+- If another account is signed in to Riot, it is signed out automatically before connecting the selected account.
 - If a League or TFT client is open with another account, League Accounts warns you before closing it. If a **match is in progress**, the warning says so: leaving a game can lead to penalties.
-- If you need to finish signing in yourself (2FA code, captcha), the game launches only after a confirmed sign-in.
+- If you need to finish signing in yourself (2FA code, captcha), complete verification in the Riot window. The game launches only after the selected account is confirmed signed in.
 
 Prefer the old behavior? In **Settings → Login**, choose *Type into the previous window*: the app switches back to the last window with Alt+Tab and types there.
 

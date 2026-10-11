@@ -28,9 +28,12 @@ that no dummy secrets, input JSON, or user paths reached the files.
 Riot login tests simulate cold startup, a signed-out client, a signed-in client,
 and lifecycle sign-out with a loopback HTTP server. The lifecycle API is the
 readiness source; a missing RSO authorization is not treated as a login form.
-Readiness must restart after an authentication interruption, window replacement,
-or client endpoint change. Diagnostic tests verify that repeated waiting states
-are logged once per transition and remain fixed categories without account data.
+Diagnostic tests verify that repeated waiting states are logged once per
+transition and remain fixed categories without account data. Renderer tests
+reject nonlocal debugger URLs and unknown authentication results.
+Run `npm test` for native-form regression tests covering MFA rejection and
+authentication errors while a challenge remains visible. Startup tests verify
+that a normal Riot window is available before waiting for session readiness.
 
 The endpoint contract is described in the [extracted Riot API documentation](https://github.com/KebsCS/lcu-and-riotclient-api/blob/main/riotclient/data_info.json).
 The signed-out `PendingLoginStrategy` and signed-in `PendingProductContext`
@@ -48,7 +51,7 @@ entries under a unique test service. It verifies that a failed deletion restores
 the selected account without changing another account's password or a stale
 shared entry. The dummy entries are removed even if an assertion fails.
 
-## Login focus and DPI regressions
+## Previous-window typing regressions
 
 The typing tests exercise the production sequencing helper with mocked clipboard
 and input operations. They cover focus/cancellation guards before every action,
@@ -57,25 +60,10 @@ rejected input, field order, and an empty password. Actual Windows typing keeps
 using `clipboard::set_private_text`; ordinary clipboard writes must not replace
 it when changing the focus logic.
 
-Activation tests cover delayed/refused requests, stable focus, bounded retries,
-and cancellation, including cancellation during a focus observation. The newer
-lifecycle, endpoint, identity, and readiness-reset tests remain in place.
-
-Window geometry is queried under a scoped DPI-unaware thread context, making
-`GetWindowRect` return 96-DPI logical coordinates. The 600x400 threshold uses the
-same units; no physical-bounds/`GetDpiForWindow` division is involved. Geometry
-tests cover threshold boundaries, negative origins, invalid rectangles, and
-wide differences. Native Windows tests verify context restoration on failed
-queries and discovery, and compare actual hidden-window bounds across unaware,
-system-aware, per-monitor-aware, and per-monitor-v2 target/caller contexts.
-They create and destroy only their own hidden windows; they do not activate
-windows, inject keys, or read/write the clipboard.
-
-These tests run on the available desktop and do not emulate a real mixed-DPI
-monitor layout or Riot's login form. The interactive checks below remain needed.
-The relevant Windows contracts are [GetWindowRect](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getwindowrect),
-[coordinate virtualization](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-physicaltologicalpointforpermonitordpi),
-and [GetDpiForWindow](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getdpiforwindow).
+Previous-window typing waits for a stable foreground target and stops if that
+target loses focus. Riot login uses its native renderer, so it no longer needs
+window geometry, DPI thresholds, or foreground activation. The interactive
+checks below still cover real mixed-monitor layouts and Riot's login form.
 
 ## Interactive Windows checks
 
@@ -86,10 +74,10 @@ Accounts on different displays. Cover 100%, 125%, 150%, 200%, and 300% scaling,
 a secondary monitor to the left/above the primary, and minimized restoration.
 Include system DPI at 200% with a 100% secondary display and a system-DPI-aware
 dummy form on that secondary display, not only per-monitor-aware targets.
-A logical 800x600 form must not be rejected as 400x300. In the previous-window
-method, focus the dummy form before returning to League Accounts.
+In the previous-window method, focus the dummy form before returning to League
+Accounts.
 
-Activation must finish before typing. Change focus or cancel while typing:
+For previous-window typing, activation must finish first. Change focus:
 remaining steps must stop, without reactivating the target or continuing in the
 new window. Repeat during the clipboard preparation delay where practical.
 Enable Windows clipboard history and verify that neither dummy credential is
@@ -114,3 +102,35 @@ flows to verify that the lifecycle/endpoint/identity safeguards are retained.
 4. Verify Add New Account, Multi Add, and Friend Elo with an empty account list
    and a long list. Reduce the window height and scroll the main content to the
    controls below the independently scrolling table.
+5. With the Riot login method and a test account, try a cold start, a minimized
+   client, switching accounts, and cancelling during setup or verification.
+   Credentials must be submitted without keystrokes or foreground focus. CAPTCHA
+   and MFA must appear in Riot Client. A rejected login must stop without retries.
+   After success, cancellation, or failure, check that a normal Riot window is
+   restored and its temporary debugger is gone. Verify the selected identity
+   before launching the game. Logs must contain fixed categories only.
+
+## Renderer login
+
+`node scripts/try-riot-renderer-login.mjs <saved-account-id>` is a Windows
+development prototype of the native Rust integration in the app. Close the normal
+Riot Client and any game first. It starts Riot Services with `--headless`, runs
+one Electron renderer, fills the native React form while minimized, and verifies
+the signed-in username through the local API. An already-connected target account
+is left alone. CAPTCHA/MFA, when required, stay in Riot's own UI for a human to
+complete. The prototype does not retry rejected credentials automatically.
+
+The debugger uses an allocated nonzero loopback port. Chromium's special
+`--remote-debugging-port=0` launch sets `navigator.webdriver=true`; that setting
+coincided with rejected authentication in the live experiment. After switching
+to a nonzero port, a live login returned `success` on its first attempt without
+a visible CAPTCHA. The target account remained connected after replacing the
+debug renderer with a normal renderer, and no debugger remained enabled.
+This is one successful end-to-end test, not a guarantee that CAPTCHA will never
+be required. Riot's internal React handlers and module exports can change.
+
+`--verify-fill-only` checks the DOM and React credential state without submitting
+the login form. Diagnostics contain fixed categories and match booleans only;
+credentials and authentication tokens are never printed. The experiment does
+not modify Riot's installed files. The initial direct-auth and separate-browser
+CAPTCHA prototypes were removed after validating the native-renderer approach.

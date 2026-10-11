@@ -175,7 +175,7 @@ fn type_credentials_with<'a>(
 }
 
 #[cfg(windows)]
-pub(crate) fn wait_for_shortcut_release() -> bool {
+fn wait_for_shortcut_release() -> bool {
     use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
         GetAsyncKeyState, VK_CONTROL, VK_LWIN, VK_MENU, VK_RWIN, VK_SHIFT, VK_V,
     };
@@ -199,17 +199,9 @@ pub(crate) fn wait_for_shortcut_release() -> bool {
 }
 
 #[cfg(not(windows))]
-pub(crate) fn wait_for_shortcut_release() -> bool {
+fn wait_for_shortcut_release() -> bool {
     thread::sleep(Duration::from_millis(120));
     true
-}
-
-#[cfg(windows)]
-pub(crate) fn tap_alt() -> bool {
-    use windows_sys::Win32::UI::Input::KeyboardAndMouse::{KEYEVENTF_KEYUP, VK_MENU};
-    let down = send_key(VK_MENU, 0);
-    let up = send_key(VK_MENU, KEYEVENTF_KEYUP);
-    down && up
 }
 
 #[cfg(windows)]

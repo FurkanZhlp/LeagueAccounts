@@ -1,15 +1,9 @@
-//! Riot Client integration: locate and open the client, read its sign-in
-//! state from the local API, type credentials into its login window, and
-//! launch a game once sign-in is confirmed.
-//!
-//! Credentials are only typed after the session lifecycle reports that it is
-//! waiting for a login strategy and the same client window has remained visible
-//! for `WINDOW_STABLE`. Missing authorization during startup is not evidence of
-//! a signed-out session: the client may still be restoring a saved login.
-//! The game is launched only after the API confirms the intended account is
-//! signed in.
+//! Riot login through the native renderer and local session API.
+//! No keyboard input is injected; game launch requires the selected account.
 
-use crate::autotype::{type_credentials, wait_for_shortcut_release};
+#[path = "riot_renderer.rs"]
+mod renderer;
+
 use crate::logging::{self, Event, Reason};
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -19,9 +13,6 @@ use std::time::{Duration, Instant};
 
 /// Allow cold starts and client updates without relaxing login readiness.
 const LOGIN_TIMEOUT: Duration = Duration::from_secs(120);
-/// After typing, how long to wait for sign-in (2FA or captcha may need the user).
-const SIGN_IN_TIMEOUT: Duration = Duration::from_secs(90);
-const WINDOW_STABLE: Duration = Duration::from_secs(2);
 const POLL: Duration = Duration::from_millis(500);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -41,15 +32,12 @@ impl Game {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LoginOutcome {
-    /// Credentials were typed and the account is now signed in.
+    /// The selected account is confirmed signed in.
     SignedIn,
-    /// Credentials were typed but sign-in was not confirmed in time
-    /// (for example the user still has to enter a 2FA code).
+    /// Credentials were typed in explicit previous-window mode.
     Typed,
     /// This account was already signed in; nothing was typed.
     AlreadySignedIn,
-    /// A different account is signed in; nothing was typed.
-    OtherAccount,
 }
 
 /// Progress reported to the UI while signing in.
@@ -59,7 +47,9 @@ pub enum LoginStep {
     OpenClient,
     WaitAuth,
     SignOut,
+    Connect,
     FindWindow,
+    Verification,
     Focus,
     Type,
     Confirm,
@@ -74,6 +64,8 @@ impl LoginStep {
             Self::OpenClient => Reason::OpenClient,
             Self::WaitAuth => Reason::WaitAuth,
             Self::SignOut => Reason::SignOut,
+            Self::Connect => Reason::ConnectRenderer,
+            Self::Verification => Reason::AuthInteraction,
             Self::FindWindow => Reason::FindWindow,
             Self::Focus => Reason::Focus,
             Self::Type => Reason::Type,
@@ -90,6 +82,8 @@ impl LoginStep {
             LoginStep::OpenClient => "openClient",
             LoginStep::WaitAuth => "waitAuth",
             LoginStep::SignOut => "signOut",
+            LoginStep::Connect => "connect",
+            LoginStep::Verification => "verification",
             LoginStep::FindWindow => "findWindow",
             LoginStep::Focus => "focus",
             LoginStep::Type => "type",
@@ -108,6 +102,10 @@ pub enum LoginError {
     Timeout,
     /// Signing out of the current session is not available.
     SignOutFailed,
+    RendererFailed,
+    AuthRejected,
+    CaptchaRejected,
+    RateLimited,
     TypingFailed,
     /// Cancelled from the UI.
     Cancelled,
@@ -130,6 +128,10 @@ impl LoginError {
             LoginError::LaunchFailed => "riot_launch_failed",
             LoginError::Timeout => "riot_timeout",
             LoginError::SignOutFailed => "riot_sign_out_failed",
+            LoginError::RendererFailed => "riot_renderer_failed",
+            LoginError::AuthRejected => "riot_auth_rejected",
+            LoginError::CaptchaRejected => "riot_captcha_rejected",
+            LoginError::RateLimited => "riot_rate_limited",
             LoginError::TypingFailed => "autotype_failed",
             LoginError::Cancelled => "login_cancelled",
             LoginError::LeagueRunning => "league_running",
@@ -150,7 +152,6 @@ pub fn record_login_result(result: &Result<LoginOutcome, LoginError>) {
                 LoginOutcome::SignedIn => Reason::SignedIn,
                 LoginOutcome::Typed => Reason::Typed,
                 LoginOutcome::AlreadySignedIn => Reason::AlreadySignedIn,
-                LoginOutcome::OtherAccount => Reason::OtherAccount,
             },
         ),
         Err(error) => (
@@ -164,6 +165,10 @@ pub fn record_login_result(result: &Result<LoginOutcome, LoginError>) {
                 LoginError::LaunchFailed => Reason::LaunchFailed,
                 LoginError::Timeout => Reason::Timeout,
                 LoginError::SignOutFailed => Reason::SignOutFailed,
+                LoginError::RendererFailed => Reason::RendererFailed,
+                LoginError::AuthRejected => Reason::AuthRejected,
+                LoginError::CaptchaRejected => Reason::CaptchaRejected,
+                LoginError::RateLimited => Reason::HttpRateLimited,
                 LoginError::TypingFailed => Reason::TypingFailed,
                 LoginError::Cancelled => Reason::Cancelled,
                 LoginError::LeagueRunning => Reason::LeagueRunning,
@@ -207,10 +212,6 @@ pub fn game_installed(game: Game) -> bool {
         .join(r"Riot Games\Metadata")
         .join(format!("{}.live", game.product()))
         .exists()
-}
-
-fn open_client(path: &PathBuf) -> bool {
-    std::process::Command::new(path).spawn().is_ok()
 }
 
 /// Start `game` for the signed-in account and wait until its client process
@@ -339,34 +340,6 @@ impl LoginDiagnostics {
         if self.0 != Some(reason) {
             logging::record(Event::LoginWaiting, reason);
             self.0 = Some(reason);
-        }
-    }
-}
-
-/// Restart the stability interval on client restart, window replacement, or
-/// any interruption of the signed-out state. No time spent restoring a session
-/// may count toward the time the login form has been ready.
-#[derive(Default)]
-struct LoginReadiness {
-    since: Option<(String, windows::HWND, Instant)>,
-}
-
-impl LoginReadiness {
-    fn observe(&mut self, target: Option<(&str, windows::HWND)>, now: Instant) -> bool {
-        let Some((endpoint, window)) = target else {
-            self.since = None;
-            return false;
-        };
-        match &self.since {
-            Some((previous_endpoint, previous_window, since))
-                if previous_endpoint == endpoint && *previous_window == window =>
-            {
-                now.duration_since(*since) >= WINDOW_STABLE
-            }
-            _ => {
-                self.since = Some((endpoint.to_owned(), window, now));
-                false
-            }
         }
     }
 }
@@ -607,7 +580,11 @@ pub fn status() -> GameStatus {
 
 /// Close the League/TFT client and game: politely first, then forcefully.
 fn close_league(cancel: &AtomicBool) -> Result<(), LoginError> {
-    let names: Vec<&str> = CLIENT_PROCESSES.iter().copied().chain([GAME_PROCESS]).collect();
+    let names: Vec<&str> = CLIENT_PROCESSES
+        .iter()
+        .copied()
+        .chain([GAME_PROCESS])
+        .collect();
     let taskkill = |force: bool| {
         let mut command = std::process::Command::new("taskkill");
         if force {
@@ -669,26 +646,17 @@ fn close_league_with(
     }
 }
 
-/// Open the Riot Client and sign in with the credentials, then launch `game`
-/// (when given) once the account is confirmed signed in.
-///
-/// If another account is signed in, nothing is typed and `OtherAccount` is
-/// returned, unless `switch_account` asks to sign it out first.
-#[allow(clippy::too_many_arguments)]
+/// Sign in through Riot's native form, then launch the requested game.
 pub fn login(
     account_id: &str,
     password: &str,
     game: Option<Game>,
-    switch_account: bool,
     close_running: bool,
     progress: &mut dyn FnMut(LoginStep),
     cancel: &AtomicBool,
 ) -> Result<LoginOutcome, LoginError> {
-    let cancelled = || cancel.load(Ordering::SeqCst);
     check_cancelled(cancel)?;
     let path = client_path().ok_or(LoginError::ClientMissing)?;
-
-    // Never sign another account in under an open League client or match.
     let current = status();
     check_cancelled(cancel)?;
     if current.league_running() && (close_running || !current.signed_in_as(account_id)) {
@@ -698,226 +666,81 @@ pub fn login(
         progress(LoginStep::CloseLeague);
         close_league(cancel)?;
     }
+    // Keep startup verification visible; temporary renderer ownership starts
+    // only after the lifecycle confirms that the client is signed out.
+    let mut client = renderer::Renderer::new(&path);
     progress(LoginStep::OpenClient);
-    check_cancelled(cancel)?;
-    if windows::find_client_window().is_none() && !open_client(&path) {
-        return Err(LoginError::LaunchFailed);
-    }
+    client.ensure_service(cancel)?;
     progress(LoginStep::WaitAuth);
-    let mut reported = LoginStep::WaitAuth;
-    let mut report = |step: LoginStep, progress: &mut dyn FnMut(LoginStep)| {
-        if step != reported {
-            reported = step;
-            progress(step);
-        }
-    };
-    let is_this_account =
-        |api: &LocalApi| api.username().is_some_and(|name| name.eq_ignore_ascii_case(account_id));
-
     let started = Instant::now();
     let mut sign_out_sent: Option<Instant> = None;
-    let mut readiness = LoginReadiness::default();
+    let mut waiting_step = LoginStep::WaitAuth;
     let mut diagnostics = LoginDiagnostics::default();
-    let (window, endpoint) = loop {
-        if cancelled() {
-            return Err(LoginError::Cancelled);
-        }
+    loop {
+        check_cancelled(cancel)?;
         if started.elapsed() > LOGIN_TIMEOUT {
             return Err(LoginError::Timeout);
         }
-        // The lockfile is rewritten when the client restarts; re-read it.
-        let api = LocalApi::read();
-        let session = api.as_ref().map_or(
-            Session::Unknown(Reason::AuthUnavailable),
-            LocalApi::session,
-        );
-        check_cancelled(cancel)?;
-        if session != Session::SignedOut {
-            readiness.observe(None, Instant::now());
-        }
-        let signed_in_name = if session == Session::SignedIn {
-            api.as_ref().and_then(LocalApi::username)
-        } else {
-            None
-        };
-        check_cancelled(cancel)?;
-        if session == Session::SignedIn && signed_in_name.is_none() {
-            report(LoginStep::WaitAuth, progress);
-            diagnostics.waiting(Reason::AuthIdentityPending);
-            thread::sleep(POLL);
-            continue;
-        }
-        match (session, api) {
-            (Session::SignedIn, _)
-                if signed_in_name
-                    .as_deref()
-                    .is_some_and(|name| name.eq_ignore_ascii_case(account_id)) =>
-            {
-                if let Some(game) = game {
-                    report(LoginStep::LaunchGame, progress);
-                    start_game(game, account_id, cancel)?;
-                }
-                progress(LoginStep::Done);
-                return Ok(LoginOutcome::AlreadySignedIn);
-            }
-            (Session::SignedIn, _) if !switch_account => return Ok(LoginOutcome::OtherAccount),
-            (Session::SignedIn, api) => match sign_out_sent {
-                None => {
-                    report(LoginStep::SignOut, progress);
-                    api.ok_or(LoginError::SignOutFailed)?.sign_out(cancel)?;
-                    sign_out_sent = Some(Instant::now());
-                }
-                Some(sent) if sent.elapsed() > Duration::from_secs(15) => {
-                    return Err(LoginError::SignOutFailed);
-                }
-                Some(_) => {}
-            },
-            (Session::SignedOut, Some(api)) => {
-                report(LoginStep::FindWindow, progress);
-                let window = windows::find_client_window();
-                let ready = readiness.observe(
-                    window.map(|window| (api.base.as_str(), window)),
-                    Instant::now(),
-                );
-                match window {
-                    Some(window) => {
-                        diagnostics.waiting(Reason::LoginFormReady);
-                        if ready {
-                            break (window, api.base);
-                        }
-                    }
-                    None => diagnostics.waiting(Reason::FindWindow),
-                }
-            }
-            (Session::Unknown(reason), _) => {
-                report(LoginStep::WaitAuth, progress);
-                diagnostics.waiting(reason);
-            }
-            (Session::SignedOut, None) => unreachable!("signed-out requires a client API"),
-        }
-        thread::sleep(POLL);
-    };
-
-    progress(LoginStep::Focus);
-    if !wait_for_shortcut_release() {
-        check_cancelled(cancel)?;
-        return Err(LoginError::TypingFailed);
-    }
-    focus_client_with(
-        cancel,
-        || windows::foreground_is(window),
-        || windows::focus(window),
-        || thread::sleep(Duration::from_millis(100)),
-    )?;
-    // Let the login form take focus, then confirm nothing changed meanwhile.
-    thread::sleep(Duration::from_millis(1200));
-    let still_signed_out = LocalApi::read()
-        .is_some_and(|api| api.base == endpoint && api.session() == Session::SignedOut);
-    if cancelled() {
-        return Err(LoginError::Cancelled);
-    }
-    if !still_signed_out || !windows::foreground_is(window) {
-        return Err(LoginError::TypingFailed);
-    }
-    progress(LoginStep::Type);
-    if !type_credentials(account_id, password, || {
-        !cancelled() && windows::foreground_is(window)
-    }) {
-        check_cancelled(cancel)?;
-        return Err(LoginError::TypingFailed);
-    }
-    progress(LoginStep::Confirm);
-
-    // Launch the game only once this account is confirmed signed in.
-    let typed = Instant::now();
-    while typed.elapsed() < SIGN_IN_TIMEOUT {
-        if cancelled() {
-            return Err(LoginError::Cancelled);
-        }
-        thread::sleep(Duration::from_secs(1));
         if let Some(api) = LocalApi::read() {
             match api.session() {
-                Session::SignedIn if is_this_account(&api) => {
-                    if let Some(game) = game {
-                        progress(LoginStep::LaunchGame);
-                        start_game(game, account_id, cancel)?;
+                Session::SignedIn => match api.username() {
+                    Some(name) if name.eq_ignore_ascii_case(account_id) => {
+                        client.restore()?;
+                        check_cancelled(cancel)?;
+                        if let Some(game) = game {
+                            progress(LoginStep::LaunchGame);
+                            start_game(game, account_id, cancel)?;
+                        }
+                        progress(LoginStep::Done);
+                        return Ok(LoginOutcome::AlreadySignedIn);
                     }
-                    progress(LoginStep::Done);
-                    return Ok(LoginOutcome::SignedIn);
+                    Some(_) if sign_out_sent.is_none() => {
+                        progress(LoginStep::SignOut);
+                        api.sign_out(cancel)?;
+                        sign_out_sent = Some(Instant::now());
+                    }
+                    Some(_)
+                        if sign_out_sent
+                            .is_some_and(|sent| sent.elapsed() > Duration::from_secs(15)) =>
+                    {
+                        return Err(LoginError::SignOutFailed)
+                    }
+                    _ => diagnostics.waiting(Reason::AuthIdentityPending),
+                },
+                Session::SignedOut => break,
+                Session::Unknown(reason) => {
+                    let step = if reason == Reason::AuthInteraction {
+                        LoginStep::Verification
+                    } else {
+                        LoginStep::WaitAuth
+                    };
+                    if step != waiting_step {
+                        progress(step);
+                        waiting_step = step;
+                    }
+                    diagnostics.waiting(reason);
                 }
-                Session::SignedIn => diagnostics.waiting(Reason::AuthIdentityPending),
-                Session::SignedOut => diagnostics.waiting(Reason::Confirm),
-                Session::Unknown(reason) => diagnostics.waiting(reason),
-            }
-        } else {
-            diagnostics.waiting(Reason::AuthUnavailable);
-        }
-    }
-    Ok(LoginOutcome::Typed)
-}
-
-/// Activation may be delayed or refused. Poll for up to five seconds and
-/// require 300 ms of stable foreground focus. Never reactivate during typing.
-fn focus_client_with(
-    cancel: &AtomicBool,
-    mut focused: impl FnMut() -> bool,
-    mut activate: impl FnMut(),
-    mut wait: impl FnMut(),
-) -> Result<(), LoginError> {
-    let mut stable = 0;
-    for attempt in 0..50 {
-        check_cancelled(cancel)?;
-        let is_focused = focused();
-        check_cancelled(cancel)?;
-        if is_focused {
-            stable += 1;
-            if stable >= 4 {
-                return Ok(());
-            }
-        } else {
-            stable = 0;
-            if attempt % 5 == 0 {
-                activate();
             }
         }
-        wait();
+        thread::sleep(POLL);
     }
+    renderer::sign_in(&mut client, account_id, password, progress, cancel)?;
+    client.restore()?;
     check_cancelled(cancel)?;
-    Err(LoginError::TypingFailed)
+    if let Some(game) = game {
+        progress(LoginStep::LaunchGame);
+        start_game(game, account_id, cancel)?;
+    }
+    progress(LoginStep::Done);
+    Ok(LoginOutcome::SignedIn)
 }
 
 #[cfg(windows)]
 mod windows {
-    pub(super) use windows_sys::Win32::Foundation::HWND;
-    use windows_sys::Win32::Foundation::{CloseHandle, LPARAM, RECT};
+    use windows_sys::Win32::Foundation::CloseHandle;
     use windows_sys::Win32::System::Threading::{
         OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION,
     };
-    use windows_sys::Win32::UI::HiDpi::{
-        SetThreadDpiAwarenessContext, DPI_AWARENESS_CONTEXT, DPI_AWARENESS_CONTEXT_UNAWARE,
-    };
-    use windows_sys::Win32::UI::WindowsAndMessaging::{
-        EnumWindows, GetForegroundWindow, GetWindowRect, GetWindowTextLengthW,
-        GetWindowThreadProcessId, IsIconic, IsWindowVisible, SetForegroundWindow, ShowWindow,
-        SW_RESTORE,
-    };
-
-    /// Executable names of the Riot Client UI across client generations.
-    const CLIENT_UI: [&str; 2] = ["riot client.exe", "riotclientux.exe"];
-
-    fn process_name(window: HWND) -> Option<String> {
-        let mut pid = 0u32;
-        // SAFETY: `window` comes from EnumWindows; `pid` is a valid out pointer.
-        unsafe { GetWindowThreadProcessId(window, &mut pid) };
-        if pid == 0 {
-            return None;
-        }
-        process_path(pid)?
-            .file_name()?
-            .to_str()
-            .map(str::to_ascii_lowercase)
-    }
-
     pub fn process_path(pid: u32) -> Option<std::path::PathBuf> {
         // SAFETY: plain query handle, closed below.
         let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
@@ -927,7 +750,8 @@ mod windows {
         let mut buffer = [0u16; 1024];
         let mut length = buffer.len() as u32;
         // SAFETY: buffer and length describe a writable UTF-16 buffer.
-        let ok = unsafe { QueryFullProcessImageNameW(process, 0, buffer.as_mut_ptr(), &mut length) };
+        let ok =
+            unsafe { QueryFullProcessImageNameW(process, 0, buffer.as_mut_ptr(), &mut length) };
         // SAFETY: handle opened above.
         unsafe { CloseHandle(process) };
         if ok == 0 {
@@ -936,196 +760,6 @@ mod windows {
         let path = String::from_utf16_lossy(&buffer[..length as usize]);
         Some(std::path::PathBuf::from(path))
     }
-
-    /// Restore this thread's context on normal returns and unwinding.
-    struct DpiContext(DPI_AWARENESS_CONTEXT);
-
-    impl DpiContext {
-        fn enter(context: DPI_AWARENESS_CONTEXT) -> Option<Self> {
-            // SAFETY: changes only the calling thread; invalid contexts fail.
-            let previous = unsafe { SetThreadDpiAwarenessContext(context) };
-            if previous.is_null() { None } else { Some(Self(previous)) }
-        }
-    }
-
-    impl Drop for DpiContext {
-        fn drop(&mut self) {
-            // SAFETY: the context was returned by a successful change on this
-            // thread. The guard is never transferred to another thread.
-            unsafe { SetThreadDpiAwarenessContext(self.0) };
-        }
-    }
-
-    fn window_rect_96(window: HWND) -> Option<RECT> {
-        // GetWindowRect is DPI-virtualized for the caller. Query directly in
-        // 96-DPI logical coordinates so the rectangle and size thresholds use
-        // the same units, regardless of the worker or target's awareness.
-        // Do not divide physical bounds by GetDpiForWindow: a system-aware
-        // target keeps its system DPI when scaled onto a different monitor.
-        let _context = DpiContext::enter(DPI_AWARENESS_CONTEXT_UNAWARE)?;
-        let mut rect = RECT { left: 0, top: 0, right: 0, bottom: 0 };
-        // SAFETY: rect is writable; Windows rejects invalid window handles.
-        if unsafe { GetWindowRect(window, &mut rect) } == 0 { None } else { Some(rect) }
-    }
-
-    fn login_window_size(rect: RECT) -> bool {
-        // Widen before subtracting; virtual desktop origins can be negative.
-        i64::from(rect.right) - i64::from(rect.left) >= 600
-            && i64::from(rect.bottom) - i64::from(rect.top) >= 400
-    }
-
-    unsafe extern "system" fn collect(window: HWND, found: LPARAM) -> i32 {
-        // SAFETY: `found` is the &mut Option<HWND> passed to EnumWindows.
-        let found = unsafe { &mut *(found as *mut Option<HWND>) };
-        // SAFETY: window handles from EnumWindows are valid for these queries.
-        let visible = unsafe { IsWindowVisible(window) != 0 && GetWindowTextLengthW(window) > 0 };
-        if !visible || !process_name(window).is_some_and(|name| CLIENT_UI.contains(&name.as_str())) {
-            return 1;
-        }
-        // Skip splash and helper windows. Minimized login windows are restored
-        // by focus(); their minimized rectangles are not meaningful here.
-        let large = unsafe { IsIconic(window) != 0 }
-            || window_rect_96(window).is_some_and(login_window_size);
-        if large {
-            *found = Some(window);
-            return 0;
-        }
-        1
-    }
-
-    pub fn find_client_window() -> Option<HWND> {
-        let mut found: Option<HWND> = None;
-        // SAFETY: the callback only writes through the pointer we pass in.
-        unsafe { EnumWindows(Some(collect), &mut found as *mut _ as LPARAM) };
-        found
-    }
-
-    pub fn focus(window: HWND) {
-        // SAFETY: these APIs reject stale handles without dereferencing them.
-        unsafe {
-            if IsIconic(window) != 0 {
-                ShowWindow(window, SW_RESTORE);
-            }
-        }
-        // An Alt tap may allow activation under foreground-lock rules. The
-        // caller establishes success by polling the actual foreground window.
-        if crate::autotype::tap_alt() {
-            unsafe { SetForegroundWindow(window) };
-        }
-    }
-
-    pub fn foreground_is(window: HWND) -> bool {
-        // SAFETY: read-only query.
-        unsafe { GetForegroundWindow() == window }
-    }
-
-    #[cfg(test)]
-    mod tests {
-        use super::*;
-        use windows_sys::Win32::UI::HiDpi::{
-            AreDpiAwarenessContextsEqual, GetThreadDpiAwarenessContext,
-            DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE,
-            DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
-            DPI_AWARENESS_CONTEXT_SYSTEM_AWARE,
-        };
-
-        #[test]
-        fn logical_window_size_handles_negative_origins_and_boundary_sizes() {
-            for (left, top) in [(0, 0), (-3840, -2160), (3840, 2160)] {
-                let rect = RECT { left, top, right: left + 600, bottom: top + 400 };
-                assert!(login_window_size(rect));
-                assert!(!login_window_size(RECT { right: rect.right - 1, ..rect }));
-                assert!(!login_window_size(RECT { bottom: rect.bottom - 1, ..rect }));
-                assert!(!login_window_size(RECT { right: left - 1, ..rect }));
-                // A system-aware 800x600 window on a 100% secondary display
-                // is 800x600 in the query's 96-DPI space, even if its target
-                // DPI is 192. No second division by the target DPI is allowed.
-                assert!(login_window_size(RECT {
-                    left, top, right: left + 800, bottom: top + 600,
-                }));
-            }
-            assert!(login_window_size(RECT {
-                left: i32::MIN, top: i32::MIN, right: i32::MAX, bottom: i32::MAX,
-            }));
-            assert!(!login_window_size(RECT {
-                left: i32::MAX, top: i32::MAX, right: i32::MIN, bottom: i32::MIN,
-            }));
-        }
-
-        #[test]
-        fn geometry_and_discovery_restore_the_callers_dpi_context() {
-            for context in [
-                DPI_AWARENESS_CONTEXT_UNAWARE,
-                DPI_AWARENESS_CONTEXT_SYSTEM_AWARE,
-                DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE,
-                DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
-            ] {
-                let _caller = DpiContext::enter(context).unwrap();
-                // Exercise the geometry query's early error return, too.
-                assert!(window_rect_96(std::ptr::null_mut()).is_none());
-                let _ = find_client_window();
-                assert_ne!(unsafe {
-                    AreDpiAwarenessContextsEqual(GetThreadDpiAwarenessContext(), context)
-                }, 0);
-            }
-        }
-
-        #[test]
-        fn native_window_bounds_use_the_same_units_for_every_target_awareness() {
-            use windows_sys::Win32::UI::WindowsAndMessaging::{
-                CreateWindowExW, DestroyWindow, WS_POPUP,
-            };
-
-            struct TestWindow(HWND);
-            impl Drop for TestWindow {
-                fn drop(&mut self) {
-                    // SAFETY: this hidden test window belongs to this thread.
-                    unsafe { DestroyWindow(self.0) };
-                }
-            }
-
-            let class: Vec<u16> = "STATIC\0".encode_utf16().collect();
-            let title: Vec<u16> = "LeagueAccounts DPI test\0".encode_utf16().collect();
-            let contexts = [
-                DPI_AWARENESS_CONTEXT_UNAWARE,
-                DPI_AWARENESS_CONTEXT_SYSTEM_AWARE,
-                DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE,
-                DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
-            ];
-            for target_context in contexts {
-                let _target = DpiContext::enter(target_context).unwrap();
-                // A built-in class needs no registration or application data.
-                // The window is never shown, activated, or sent keyboard input.
-                let window = unsafe {
-                    CreateWindowExW(
-                        0, class.as_ptr(), title.as_ptr(), WS_POPUP,
-                        0, 0, 800, 600, std::ptr::null_mut(), std::ptr::null_mut(),
-                        std::ptr::null_mut(), std::ptr::null(),
-                    )
-                };
-                assert!(!window.is_null());
-                let window = TestWindow(window);
-                let expected = {
-                    let _unaware = DpiContext::enter(DPI_AWARENESS_CONTEXT_UNAWARE).unwrap();
-                    let mut rect = RECT { left: 0, top: 0, right: 0, bottom: 0 };
-                    assert_ne!(unsafe { GetWindowRect(window.0, &mut rect) }, 0);
-                    rect
-                };
-                for caller_context in contexts {
-                    let _caller = DpiContext::enter(caller_context).unwrap();
-                    let actual = window_rect_96(window.0).unwrap();
-                    assert_eq!(
-                        (actual.left, actual.top, actual.right, actual.bottom),
-                        (expected.left, expected.top, expected.right, expected.bottom),
-                    );
-                    assert_eq!(login_window_size(actual), login_window_size(expected));
-                    assert_ne!(unsafe {
-                        AreDpiAwarenessContextsEqual(GetThreadDpiAwarenessContext(), caller_context)
-                    }, 0);
-                }
-            }
-        }
-    }
 }
 
 #[cfg(not(windows))]
@@ -1133,103 +767,12 @@ mod windows {
     pub fn process_path(_: u32) -> Option<std::path::PathBuf> {
         None
     }
-    pub type HWND = usize;
-    pub fn find_client_window() -> Option<HWND> {
-        None
-    }
-    pub fn focus(_: HWND) {}
-    pub fn foreground_is(_: HWND) -> bool {
-        false
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::cell::Cell;
-
-    #[test]
-    fn focus_waits_for_delayed_activation_and_retries_refused_requests() {
-        let polls = Cell::new(0);
-        let requests = Cell::new(0);
-        let result = focus_client_with(
-            &AtomicBool::new(false),
-            || polls.get() >= 8,
-            || requests.set(requests.get() + 1),
-            || polls.set(polls.get() + 1),
-        );
-        assert_eq!(result, Ok(()));
-        assert_eq!(requests.get(), 2);
-        assert_eq!(polls.get(), 11);
-    }
-
-    #[test]
-    fn focus_must_stabilize_and_gives_up_without_typing() {
-        let polls = Cell::new(0);
-        let result = focus_client_with(
-            &AtomicBool::new(false),
-            || matches!(polls.get(), 1 | 2) || polls.get() >= 6,
-            || {},
-            || polls.set(polls.get() + 1),
-        );
-        assert_eq!(result, Ok(()));
-        assert_eq!(polls.get(), 9);
-
-        let requests = Cell::new(0);
-        assert_eq!(
-            focus_client_with(
-                &AtomicBool::new(false),
-                || false,
-                || requests.set(requests.get() + 1),
-                || {},
-            ),
-            Err(LoginError::TypingFailed)
-        );
-        assert_eq!(requests.get(), 10);
-    }
-
-    #[test]
-    fn focus_stops_when_cancelled() {
-        let cancel = AtomicBool::new(true);
-        assert_eq!(
-            focus_client_with(
-                &cancel,
-                || panic!("must not query after cancellation"),
-                || panic!("must not activate after cancellation"),
-                || panic!("must not wait after cancellation"),
-            ),
-            Err(LoginError::Cancelled)
-        );
-        cancel.store(false, Ordering::SeqCst);
-        let requests = Cell::new(0);
-        assert_eq!(
-            focus_client_with(
-                &cancel,
-                || false,
-                || requests.set(requests.get() + 1),
-                || cancel.store(true, Ordering::SeqCst),
-            ),
-            Err(LoginError::Cancelled)
-        );
-        assert_eq!(requests.get(), 1);
-    }
-
-    #[test]
-    fn cancellation_during_focus_observation_prevents_activation() {
-        let cancel = AtomicBool::new(false);
-        assert_eq!(
-            focus_client_with(
-                &cancel,
-                || {
-                    cancel.store(true, Ordering::SeqCst);
-                    false
-                },
-                || panic!("must not activate after cancellation"),
-                || panic!("must not wait after cancellation"),
-            ),
-            Err(LoginError::Cancelled)
-        );
-    }
 
     #[test]
     fn lifecycle_never_treats_startup_errors_or_challenges_as_a_login_form() {
@@ -1258,16 +801,22 @@ mod tests {
             );
         }
         assert_eq!(
-            session_state(Some((200, json!({
-                "loginState": "PendingAuthentication", "actionRequired": true
-            })))),
+            session_state(Some((
+                200,
+                json!({
+                    "loginState": "PendingAuthentication", "actionRequired": true
+                })
+            ))),
             Session::Unknown(Reason::AuthInteraction)
         );
         // An identity always prevents typing, even across a transitional response.
         assert_eq!(
-            session_state(Some((200, json!({
-                "loginState": "PendingLoginStrategy", "puuid": "signed-in-player"
-            })))),
+            session_state(Some((
+                200,
+                json!({
+                    "loginState": "PendingLoginStrategy", "puuid": "signed-in-player"
+                })
+            ))),
             Session::SignedIn
         );
     }
@@ -1296,16 +845,20 @@ mod tests {
                 Session::SignedOut,
             ),
         ];
-        let mut exchanges: Vec<_> = responses.iter()
+        let mut exchanges: Vec<_> = responses
+            .iter()
             .map(|(body, _)| ("GET /player-session-lifecycle/v1/session ", *body))
             .collect();
-        exchanges.splice(3..3, [
-            (
-                "GET /help ",
-                r#"{"functions":{"DeletePlayerSessionLifecycleV1Session":{}}}"#,
-            ),
-            ("DELETE /player-session-lifecycle/v1/session ", "{}"),
-        ]);
+        exchanges.splice(
+            3..3,
+            [
+                (
+                    "GET /help ",
+                    r#"{"functions":{"DeletePlayerSessionLifecycleV1Session":{}}}"#,
+                ),
+                ("DELETE /player-session-lifecycle/v1/session ", "{}"),
+            ],
+        );
         let server = thread::spawn(move || {
             for (request, body) in exchanges {
                 let (mut stream, _) = listener.accept().unwrap();
@@ -1325,7 +878,12 @@ mod tests {
                         break;
                     }
                 }
-                write!(stream, "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
+                write!(
+                    stream,
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                )
+                .unwrap();
             }
         });
         let api = LocalApi {
@@ -1347,43 +905,23 @@ mod tests {
     }
 
     #[test]
-    fn login_readiness_restarts_after_auth_window_or_client_changes() {
-        let mut readiness = LoginReadiness::default();
-        let start = Instant::now();
-        // Opaque test handles are only compared, never passed to Windows.
-        let first = 1usize as windows::HWND;
-        let second = 2usize as windows::HWND;
-        let target = Some(("client-one", first));
-        assert!(!readiness.observe(target, start));
-        assert!(!readiness.observe(target, start + Duration::from_secs(1)));
-        assert!(readiness.observe(target, start + WINDOW_STABLE));
-
-        // Authentication restoration or a missing window resets all readiness.
-        assert!(!readiness.observe(None, start + Duration::from_secs(3)));
-        assert!(!readiness.observe(target, start + Duration::from_secs(4)));
-        assert!(!readiness.observe(target, start + Duration::from_secs(5)));
-        assert!(readiness.observe(target, start + Duration::from_secs(6)));
-
-        // Replacing the splash/login window starts a fresh interval.
-        let replacement = Some(("client-one", second));
-        assert!(!readiness.observe(replacement, start + Duration::from_secs(7)));
-        assert!(readiness.observe(replacement, start + Duration::from_secs(9)));
-
-        // A new API endpoint cannot inherit readiness from the previous client.
-        let restarted = Some(("client-two", second));
-        assert!(!readiness.observe(restarted, start + Duration::from_secs(10)));
-        assert!(readiness.observe(restarted, start + Duration::from_secs(12)));
-    }
-
-    #[test]
     #[cfg(windows)]
     fn process_discovery_locates_the_executable_for_a_running_pid() {
         let processes = running_processes();
-        let current = processes.iter()
-            .find(|process| process.pid == std::process::id()).unwrap();
+        let current = processes
+            .iter()
+            .find(|process| process.pid == std::process::id())
+            .unwrap();
         let executable = std::env::current_exe().unwrap();
-        assert_eq!(current.name,
-            executable.file_name().unwrap().to_str().unwrap().to_ascii_lowercase());
+        assert_eq!(
+            current.name,
+            executable
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_ascii_lowercase()
+        );
         assert_eq!(windows::process_path(current.pid), Some(executable));
     }
 
@@ -1619,7 +1157,12 @@ mod tests {
             }
             server_cancel.store(true, Ordering::SeqCst);
             let body = r#"{"functions":{"DeletePlayerSessionLifecycleV1Session":{}}}"#;
-            write!(stream, "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            )
+            .unwrap();
         });
         let api = LocalApi {
             base: format!("http://{address}"),
