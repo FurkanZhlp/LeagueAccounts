@@ -58,8 +58,16 @@ fn wait(cancel: &AtomicBool, duration: Duration) -> Result<(), LoginError> {
     check_cancelled(cancel)
 }
 
+fn belongs_to_installation(path: &Path, root: &Path) -> bool {
+    // Riot's install metadata uses '/', while Windows process paths use '\\'.
+    // Compare path components so either separator works and sibling folders
+    // cannot match merely because their names share a prefix.
+    let path = PathBuf::from(path.as_os_str().to_ascii_lowercase());
+    let root = PathBuf::from(root.as_os_str().to_ascii_lowercase());
+    path.starts_with(root)
+}
+
 fn client_processes(root: &Path) -> Result<Vec<Process>, LoginError> {
-    let prefix = format!("{}\\", root.to_string_lossy()).to_ascii_lowercase();
     let mut processes = Vec::new();
     for process in running_processes().into_iter().filter(|p| {
         matches!(
@@ -73,11 +81,7 @@ fn client_processes(root: &Path) -> Result<Vec<Process>, LoginError> {
             }
             continue;
         };
-        if path
-            .to_string_lossy()
-            .to_ascii_lowercase()
-            .starts_with(&prefix)
-        {
+        if belongs_to_installation(&path, root) {
             processes.push(process);
         }
     }
@@ -533,6 +537,40 @@ mod tests {
 
     fn starts() -> Vec<bool> {
         STARTS.with(|starts| starts.borrow().clone())
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn installation_processes_match_riot_metadata_with_forward_slashes() {
+        let service = Path::new("C:/Program Files/Riot Games/Riot Client/RiotClientServices.exe");
+        let root = service.parent().unwrap();
+        for executable in [
+            r"C:\Program Files\Riot Games\Riot Client\RiotClientServices.exe",
+            r"C:\Program Files\Riot Games\Riot Client\RiotClientElectron\Riot Client.exe",
+            r"c:\PROGRAM FILES\Riot Games\Riot Client\RiotClientElectron\Riot Client.exe",
+            "C:/Program Files/Riot Games/Riot Client/RiotClientElectron/Riot Client.exe",
+        ] {
+            assert!(
+                belongs_to_installation(Path::new(executable), root),
+                "{executable}"
+            );
+        }
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn installation_processes_exclude_other_directories_and_drives() {
+        let root = Path::new(r"C:\Program Files\Riot Games\Riot Client");
+        for executable in [
+            r"C:\Program Files\Riot Games\Riot Client Other\RiotClientServices.exe",
+            r"C:\Program Files\Riot Games\League of Legends\LeagueClient.exe",
+            r"D:\Program Files\Riot Games\Riot Client\RiotClientServices.exe",
+        ] {
+            assert!(
+                !belongs_to_installation(Path::new(executable), root),
+                "{executable}"
+            );
+        }
     }
 
     #[test]

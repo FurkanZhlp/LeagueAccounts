@@ -24,6 +24,9 @@ they do not read saved credentials, contact Riot, or terminate installed games.
   cancellation, unwinding, failed startup, and existing normal/headless clients.
   The service-launch trace verifies that a normal window is opened before the
   initial authentication wait, including when only a headless service exists.
+  Process ownership compares Windows path components: forward slashes in Riot's
+  install metadata still match native process paths, while sibling directories
+  and other drives are excluded.
 - `tests/riot_renderer.test.mjs` runs the production renderer helper against a
   dummy native form. It checks rejection after MFA resets the form, terminal
   errors while a CAPTCHA remains visible, pending challenges, and success.
@@ -62,6 +65,10 @@ expressions, or renderer command lines while inspecting these cases.
 6. Verify that successful login and account switching still restore a normal
    renderer without DevTools before game launch, and that identity verification
    and the warning before closing another account's game still apply.
+7. With forward slashes in `RiotClientInstalls.json`, sign in from both a stopped
+   client and an already-open Riot window. Repeat with game launch enabled and
+   disabled. Exactly one normal Riot Client window must remain after login;
+   the old client and temporary renderer must both have exited.
 
 The automated dummy-process tests are not a substitute for these installed-client
 checks: Riot's native renderer and authentication UI are undocumented interfaces.
