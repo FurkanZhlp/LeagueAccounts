@@ -5,6 +5,7 @@ Run on Windows 10 or 11:
 ```text
 cargo test --locked --workspace
 cargo clippy --locked --workspace --all-targets -- -D warnings
+npm test
 npm run build
 ```
 
@@ -21,8 +22,11 @@ they do not read saved credentials, contact Riot, or terminate installed games.
 - `src/riot_renderer.rs` checks stale-lockfile startup, restoration when the
   selected account was already connected and no game is launched, early errors,
   cancellation, unwinding, failed startup, and existing normal/headless clients.
-  The service-launch trace distinguishes a headless start from normal restoration
-  and verifies that successful cleanup runs only once.
+  The service-launch trace verifies that a normal window is opened before the
+  initial authentication wait, including when only a headless service exists.
+- `tests/riot_renderer.test.mjs` runs the production renderer helper against a
+  dummy native form. It checks rejection after MFA resets the form, terminal
+  errors while a CAPTCHA remains visible, pending challenges, and success.
 - `src/riot_process.rs` checks Windows argument quoting and real native process
   containment. One test drops the owner; another deliberately calls
   `std::process::exit` in a dummy parent, bypassing Rust destructors. In both cases
@@ -41,8 +45,12 @@ expressions, or renderer command lines while inspecting these cases.
    **Launch the game after signing in**. Start from a stopped client. A normal
    Riot window must open before League Accounts reports an already-connected
    result; the service must not remain headless with no UI.
-3. Cancel while the initial authentication/session-restore step is running,
-   before the temporary renderer is created. A normal client must be restored.
+3. Require verification during initial authentication/session restoration. The
+   normal Riot window must already be available and the progress view must ask
+   for verification. Cancel before the temporary renderer is created; the normal
+   client must remain available. After an MFA challenge, trigger a rejected or
+   expired login that resets the form: report failure immediately, not after the
+   five-minute timeout.
 4. Close League Accounts using the title-bar close button during renderer setup
    and during CAPTCHA/MFA. Shutdown must request cancellation and wait for native
    cleanup; the temporary renderer and debugger listener must terminate before

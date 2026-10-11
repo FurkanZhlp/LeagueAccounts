@@ -29,6 +29,8 @@ jobs:
       # The Tauri shell embeds ../dist at compile time, so build the UI first.
       - name: Type-check and build the UI
         run: npm run build
+      - name: Renderer authentication regressions
+        run: npm test
       - name: Unit and regression tests
         run: cargo +stable test --locked --workspace --all-targets
       - name: Clippy

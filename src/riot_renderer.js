@@ -57,13 +57,15 @@
       return true;
     },
     status() {
+      // The first auth response can request MFA, then the native UI can reset
+      // after rejection or expiry. Current failures must override that snapshot.
+      if (!["pending", "success", "verification"].includes(state.result)) return state.result;
+      if (field("password") && !field("password").value && document.querySelector('[data-testid="login-form-error-tooltip"]')) return "rejected";
       const overlay = document.querySelector('[aria-label="hcaptcha challenge"]');
       const captcha = !!overlay && overlay.getBoundingClientRect().width > 0
         && getComputedStyle(overlay).visibility !== "hidden" && getComputedStyle(overlay).opacity !== "0";
       if (captcha || state.result === "verification") return "verification";
-      if (state.result !== "pending") return state.result;
-      if (field("password") && !field("password").value && document.querySelector('[data-testid="login-form-error-tooltip"]')) return "rejected";
-      return "pending";
+      return state.result;
     },
     showVerification() { windowAction("Window.Restore"); windowAction("Window.Show"); },
   };

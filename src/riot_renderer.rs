@@ -236,12 +236,10 @@ impl Renderer {
     ) -> Result<(), LoginError> {
         check_cancelled(cancel)?;
         if !service_running || !renderer_running {
-            // Arm before spawning so errors/cancellation during initial auth
-            // restoration cannot strand a headless client.
-            self.restore_needed = true;
-        }
-        if !service_running {
-            (self.service_start)(&self.service, true)?;
+            // Startup can require MFA or another interactive step before the
+            // lifecycle becomes signed out. Keep the normal UI available until
+            // sign_in owns a temporary renderer for a confirmed login form.
+            (self.service_start)(&self.service, false)?;
         }
         Ok(())
     }
@@ -282,8 +280,8 @@ impl Renderer {
 
 impl Drop for Renderer {
     fn drop(&mut self) {
-        // Covers the initial WaitAuth loop as well as renderer setup, MFA,
-        // cancellation and unwinding. Successful paths restore before launch.
+        // Covers renderer setup, MFA, cancellation and unwinding.
+        // Successful paths restore before launch.
         if self.restore().is_err() {
             logging::record(Event::LoginFailed, Reason::RendererFailed);
         }
@@ -543,9 +541,9 @@ mod tests {
         assert!(stale.is_some());
         let mut renderer = fixture();
         renderer.ensure_service_with(false, false, &AtomicBool::new(false)).unwrap();
-        assert_eq!(starts(), vec![true]);
+        assert_eq!(starts(), vec![false]);
         drop(renderer);
-        assert_eq!(starts(), vec![true, false]);
+        assert_eq!(starts(), vec![false]);
     }
 
     #[test]
@@ -556,11 +554,11 @@ mod tests {
         renderer.restore().unwrap();
         renderer.restore().unwrap();
         drop(renderer);
-        assert_eq!(starts(), vec![true, false]);
+        assert_eq!(starts(), vec![false]);
     }
 
     #[test]
-    fn initial_wait_errors_restore_even_before_renderer_setup() {
+    fn initial_wait_errors_leave_the_normal_client_available() {
         for error in [LoginError::Cancelled, LoginError::Timeout, LoginError::AuthRejected] {
             let result = (|| -> Result<(), LoginError> {
                 let mut renderer = fixture();
@@ -568,19 +566,19 @@ mod tests {
                 Err(error)
             })();
             assert_eq!(result, Err(error));
-            assert_eq!(starts(), vec![true, false]);
+            assert_eq!(starts(), vec![false]);
         }
     }
 
     #[test]
-    fn startup_unwinding_restores_the_normal_client() {
+    fn startup_unwinding_leaves_the_normal_client_available() {
         let result = std::panic::catch_unwind(|| {
             let mut renderer = fixture();
             renderer.ensure_service_with(false, false, &AtomicBool::new(false)).unwrap();
             panic!("simulated startup failure");
         });
         assert!(result.is_err());
-        assert_eq!(starts(), vec![true, false]);
+        assert_eq!(starts(), vec![false]);
     }
 
     #[test]
@@ -595,6 +593,8 @@ mod tests {
     fn existing_headless_service_gets_a_renderer_without_restarting_auth() {
         let mut renderer = fixture();
         renderer.ensure_service_with(true, false, &AtomicBool::new(false)).unwrap();
+        // Verification must be possible during WaitAuth, before cleanup runs.
+        assert_eq!(starts(), vec![false]);
         drop(renderer);
         assert_eq!(starts(), vec![false]);
     }
@@ -611,19 +611,19 @@ mod tests {
     }
 
     #[test]
-    fn failed_headless_spawn_still_attempts_normal_restoration() {
-        fn fail_headless(path: &Path, headless: bool) -> Result<(), LoginError> {
+    fn failed_normal_start_is_reported_without_retry_on_drop() {
+        fn fail_start(path: &Path, headless: bool) -> Result<(), LoginError> {
             fake_start(path, headless)?;
-            if headless { Err(LoginError::LaunchFailed) } else { Ok(()) }
+            Err(LoginError::LaunchFailed)
         }
         let mut renderer = fixture();
-        renderer.service_start = fail_headless;
+        renderer.service_start = fail_start;
         assert_eq!(
             renderer.ensure_service_with(false, false, &AtomicBool::new(false)),
             Err(LoginError::LaunchFailed),
         );
         drop(renderer);
-        assert_eq!(starts(), vec![true, false]);
+        assert_eq!(starts(), vec![false]);
     }
 
     #[test]

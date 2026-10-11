@@ -29,6 +29,9 @@ readiness source; a missing RSO authorization is not treated as a login form.
 Diagnostic tests verify that repeated waiting states are logged once per
 transition and remain fixed categories without account data. Renderer tests
 reject nonlocal debugger URLs and unknown authentication results.
+Run `npm test` for native-form regression tests covering MFA rejection and
+authentication errors while a challenge remains visible. Startup tests verify
+that a normal Riot window is available before waiting for session readiness.
 
 The endpoint contract is described in the [extracted Riot API documentation](https://github.com/KebsCS/lcu-and-riotclient-api/blob/main/riotclient/data_info.json).
 The signed-out `PendingLoginStrategy` and signed-in `PendingProductContext`

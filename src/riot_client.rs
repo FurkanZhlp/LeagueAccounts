@@ -666,13 +666,15 @@ pub fn login(
         progress(LoginStep::CloseLeague);
         close_league(cancel)?;
     }
-    // Own restoration before the first headless start, including early returns.
+    // Keep startup verification visible; temporary renderer ownership starts
+    // only after the lifecycle confirms that the client is signed out.
     let mut client = renderer::Renderer::new(&path);
     progress(LoginStep::OpenClient);
     client.ensure_service(cancel)?;
     progress(LoginStep::WaitAuth);
     let started = Instant::now();
     let mut sign_out_sent: Option<Instant> = None;
+    let mut waiting_step = LoginStep::WaitAuth;
     let mut diagnostics = LoginDiagnostics::default();
     loop {
         check_cancelled(cancel)?;
@@ -706,7 +708,18 @@ pub fn login(
                     _ => diagnostics.waiting(Reason::AuthIdentityPending),
                 },
                 Session::SignedOut => break,
-                Session::Unknown(reason) => diagnostics.waiting(reason),
+                Session::Unknown(reason) => {
+                    let step = if reason == Reason::AuthInteraction {
+                        LoginStep::Verification
+                    } else {
+                        LoginStep::WaitAuth
+                    };
+                    if step != waiting_step {
+                        progress(step);
+                        waiting_step = step;
+                    }
+                    diagnostics.waiting(reason);
+                }
             }
         }
         thread::sleep(POLL);
