@@ -130,11 +130,12 @@ export function canPlayWith(rank: RankLike, friendTier: string, friendDivision: 
   }
 }
 
-/** Riot's ranked art; small crests stay crisp in filters and TFT mode. */
+/** Riot's ranked art: small crests stay crisp in filters; cards use the full emblem in both
+    games, as the client does for RANKED_TFT. */
 export function emblem(tierName: string, size = 56, mode: Mode = "lol"): string {
   const tier = normalizeTier(tierName);
   const asset = (tier === "Error" ? "Unranked" : tier).toLowerCase();
-  const mini = size <= 32 || (mode === "tft" && asset !== "unranked");
+  const mini = size <= 32;
   const src = mini ? `/league/crests/${asset}${mode === "tft" ? "-tft" : ""}.svg` : `/league/ranks/${asset}.png`;
   return `<span class="emblem ${mini ? "emblem-mini" : "emblem-full"}${!mini && asset === "unranked" ? " emblem-unranked" : ""}" style="--emblem-size:${size}px" aria-hidden="true"><img src="${src}" alt="" draggable="false" /></span>`;
 }

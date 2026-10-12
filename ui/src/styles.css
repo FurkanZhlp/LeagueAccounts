@@ -276,25 +276,6 @@ code {
   display: flex;
   height: 100%;
 }
-.lang-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  margin: 8px 8px 8px 0;
-  border-radius: 0;
-  color: var(--muted);
-  border: 1px solid var(--line);
-  transition:
-    background 0.2s,
-    color 0.2s,
-    border-color 0.2s;
-}
-.lang-btn:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--text);
-  border-color: var(--line-2);
-}
 .win-btn {
   width: 48px;
   height: 100%;
@@ -641,98 +622,6 @@ code {
   font-size: 12px;
   color: var(--faint);
   white-space: nowrap;
-}
-select,
-select::picker(select) {
-  appearance: base-select;
-}
-select {
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  height: 30px;
-  padding: 0 8px;
-  border: 0;
-  border-radius: 0;
-  outline: 0;
-  background: transparent;
-  font-weight: 500;
-  cursor: pointer;
-}
-select::picker-icon {
-  content: "";
-  flex: none;
-  width: 12px;
-  height: 12px;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238e97ab' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") center / contain no-repeat;
-  transition: transform 0.18s var(--ease);
-}
-select:open::picker-icon {
-  transform: rotate(180deg);
-}
-select::picker(select) {
-  margin-block: 6px;
-  min-width: anchor-size(width);
-  max-height: min(320px, calc(100dvh - 16px));
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  opacity: 0;
-  transform: scale(0.94) translateY(-4px);
-  transition:
-    opacity 0.18s var(--ease),
-    transform 0.18s var(--ease),
-    display 0.18s allow-discrete,
-    overlay 0.18s allow-discrete;
-}
-select:open::picker(select) {
-  opacity: 1;
-  transform: none;
-}
-#friend-tier::picker(select) {
-  max-height: min(360px, calc(100dvh - 16px));
-}
-@starting-style {
-  select:open::picker(select) {
-    opacity: 0;
-    transform: scale(0.94) translateY(-4px);
-  }
-}
-.select-wrap.full select {
-  flex: 1;
-}
-select:hover {
-  background-color: rgba(255, 255, 255, 0.05);
-}
-select:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-select option {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  border-radius: 0;
-  background: transparent;
-  color: var(--text);
-  font-weight: 400;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-select option:hover,
-select option:focus-visible {
-  background: rgba(255, 255, 255, 0.07);
-  outline: 0;
-}
-select option:checked {
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  font-weight: 600;
-}
-select option::checkmark {
-  order: 1;
-  margin-left: auto;
-  color: var(--accent);
 }
 
 .view-toggle {
@@ -1386,12 +1275,10 @@ select option::checkmark {
 .field input:focus,
 .field textarea:focus {
   border-color: color-mix(in srgb, var(--accent) 65%, transparent);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 14%, transparent);
   background: rgba(0, 0, 0, 0.35);
 }
 .field input.invalid {
   border-color: var(--danger);
-  box-shadow: 0 0 0 4px rgba(240, 82, 82, 0.14);
 }
 .field .select-wrap {
   height: 42px;
@@ -1487,8 +1374,7 @@ select option::checkmark {
 
 /* ------------------------------------------------------------------ menu */
 
-.menu,
-select::picker(select) {
+.menu {
   padding: 6px;
   border-radius: 0;
   background: rgba(20, 25, 38, 0.97);
@@ -1505,12 +1391,6 @@ select::picker(select) {
 }
 .menu.menu-out {
   animation: fade-out 0.12s ease forwards;
-}
-.menu-language {
-  min-width: 0;
-}
-.menu-language .menu-item {
-  white-space: nowrap;
 }
 @keyframes menu-in {
   from {
@@ -1544,11 +1424,6 @@ select::picker(select) {
 }
 .menu-item.danger:hover {
   background: rgba(240, 82, 82, 0.12);
-}
-.menu-sep {
-  height: 1px;
-  margin: 5px 6px;
-  background: var(--line);
 }
 
 /* ------------------------------------------------------------------ toasts */
@@ -1682,9 +1557,5 @@ select::picker(select) {
   }
   .orb {
     display: none;
-  }
-  select::picker(select),
-  select::picker-icon {
-    transition: none;
   }
 }

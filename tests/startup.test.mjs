@@ -38,11 +38,15 @@ test("startup shows only the loading screen until the interface is ready", { tim
         await page.goto(demo.base, { waitUntil: "domcontentloaded" });
         await assertLoading();
         assert.equal(await page.$eval(".brand-icon", el => el.getBoundingClientRect().width), 28);
-        assert.equal(await page.$eval("#startup-loader", el => getComputedStyle(el, "::before").animationName), "startup-spin");
-        await page.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: "reduce" }]);
-        assert.equal(await page.$eval("#startup-loader", el => getComputedStyle(el, "::before").animationName), "none");
-        await page.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: "no-preference" }]);
-        assert.equal(await page.$eval("#startup-loader", el => getComputedStyle(el, "::before").animationName), "startup-spin");
+        // The client's hextech loader (Lottie) plays while the app module is held back.
+        // It holds some poses, so watch up to one 70-frame loop (2.3 s) for movement.
+        await page.waitForSelector("#startup-animation svg");
+        await page.waitForFunction(() => {
+          const svg = document.querySelector("#startup-animation svg").innerHTML;
+          const moved = window.__firstFrame !== undefined && svg !== window.__firstFrame;
+          window.__firstFrame ??= svg;
+          return moved;
+        }, { polling: 100, timeout: 2500 });
         await release("module");
         await page.waitForSelector("#accounts > .card");
         await page.waitForFunction(() => document.fonts.status === "loading");
@@ -60,6 +64,20 @@ test("startup shows only the loading screen until the interface is ready", { tim
         assert.equal(await page.$eval(".brand-icon", el => el.getBoundingClientRect().width), 28);
         assert.equal(await page.$$eval(".card.enter, .card.enter-stagger", elements => elements.length), 0);
         assert.equal(await page.$eval("body", el => el.getAttribute("aria-busy")), "false");
+      } finally {
+        await page.close();
+      }
+    });
+    await t.test("the loading animation holds still under reduced motion", async () => {
+      const page = await demo.browser.newPage();
+      await page.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: "reduce" }]);
+      try {
+        await page.goto(`${demo.base}?scene=loading`, { waitUntil: "domcontentloaded" });
+        await page.waitForSelector("#startup-animation svg");
+        const frame = () => page.$eval("#startup-animation svg", svg => svg.innerHTML);
+        const first = await frame();
+        await new Promise(resolve => setTimeout(resolve, 300));
+        assert.equal(await frame(), first);
       } finally {
         await page.close();
       }

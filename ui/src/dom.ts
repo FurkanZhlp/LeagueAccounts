@@ -171,20 +171,18 @@ export interface MenuItem {
   label: string;
   icon: string;
   danger?: boolean;
-  hint?: string;
   run: () => void;
 }
 
-export function contextMenu(x: number, y: number, items: (MenuItem | "sep")[], kind: "account" | "language"): void {
+// The client's context menus have no separators or shortcut chips.
+export function contextMenu(x: number, y: number, items: MenuItem[]): void {
   closeMenu();
   const menu = fragment(`
-    <div class="menu menu-${kind}" role="menu">
+    <div class="menu" role="menu">
       ${items
-        .map((item, index) =>
-          item === "sep"
-            ? `<div class="menu-sep"></div>`
-            : `<button class="menu-item${item.danger ? " danger" : ""}" role="menuitem" data-index="${index}">
-                 ${icon(item.icon, 15)}<span>${esc(item.label)}</span>${item.hint ? `<kbd>${esc(item.hint)}</kbd>` : ""}
+        .map(
+          (item, index) => `<button class="menu-item${item.danger ? " danger" : ""}" role="menuitem" data-index="${index}">
+                 ${icon(item.icon, 15)}<span>${esc(item.label)}</span>
                </button>`,
         )
         .join("")}
@@ -199,7 +197,7 @@ export function contextMenu(x: number, y: number, items: (MenuItem | "sep")[], k
     if (!button) return;
     const item = items[Number(button.dataset.index)];
     closeMenu();
-    if (item !== "sep") item.run();
+    item.run();
   });
   setTimeout(() => {
     document.addEventListener("mousedown", outside, true);

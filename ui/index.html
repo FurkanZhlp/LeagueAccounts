@@ -11,16 +11,15 @@
       body:not(.ready) > :not(#startup-loader) { visibility: hidden !important; pointer-events: none !important; }
       body:not(.ready) *, body:not(.ready) *::before, body:not(.ready) *::after { animation: none !important; transition: none !important; }
       #startup-loader { position: fixed; inset: 0; z-index: 2147483647; display: grid; place-items: center; background: #060e17; color: #cdbe91; font: 14px/1.5 "Segoe UI", sans-serif; }
-      #startup-loader::before { content: ""; width: 40px; height: 40px; border-radius: 50%; background: url('/league/controls/spinner.png') center / 140% 140% no-repeat; mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1px)); animation: startup-spin 4s linear infinite !important; }
-      #startup-loader[data-failed]::before { display: none; }
-      #startup-error { max-width: 360px; padding: 24px; text-align: center; }
+      #startup-animation { width: min(300px, 45vmin); aspect-ratio: 1; grid-area: 1 / 1; pointer-events: none; }
+      #startup-loader[data-failed] #startup-animation { display: none; }
+      #startup-error { grid-area: 1 / 1; max-width: 360px; padding: 24px; text-align: center; }
       #startup-retry { margin-top: 16px; padding: 8px 24px; border: 1px solid #785a28; background: #1e2328; color: #f0e6d2; font: inherit; cursor: pointer; }
-      @keyframes startup-spin { to { transform: rotate(1turn); } }
-      @media (prefers-reduced-motion: reduce) { #startup-loader::before { animation: none !important; } }
     </style>
   </head>
   <body aria-busy="true">
     <div id="startup-loader" role="status" aria-label="Loading League Accounts">
+      <div id="startup-animation" aria-hidden="true"></div>
       <div id="startup-error" hidden>
         <p>League Accounts couldn't finish loading.</p>
         <button id="startup-retry" type="button">Try again</button>
@@ -39,9 +38,6 @@
         <button role="tab" data-mode="tft" class="mode-btn"><img src="/league/icons/tft.svg" alt="" width="23" height="23" /><span data-i18n="mode.tft"></span></button>
       </div>
       <div class="window-controls">
-        <button class="lang-btn" id="lang" data-i18n-title="lang.label" data-i18n-aria="lang.label">
-          <span data-icon="languages"></span>
-        </button>
         <button class="win-btn" data-win="minimize" data-i18n-title="win.minimize" data-i18n-aria="win.minimize"></button>
         <button class="win-btn" data-win="maximize" data-i18n-title="win.maximize" data-i18n-aria="win.maximize"></button>
         <button class="win-btn win-close" data-win="close" data-i18n-title="win.close" data-i18n-aria="win.close"></button>
@@ -59,14 +55,6 @@
           <h3 class="side-title" data-i18n="side.distribution"></h3>
           <div id="distribution" class="distribution"></div>
         </section>
-
-        <button class="schedule" id="schedule" data-i18n-title="refresh.idle" data-i18n-aria="refresh.idle">
-          <span class="schedule-ring"><span data-icon="refresh-cw"></span></span>
-          <span class="schedule-body">
-            <span class="schedule-label" data-i18n="schedule.label"></span>
-            <span class="schedule-text"></span>
-          </span>
-        </button>
 
         <section class="side-section side-bottom">
           <button class="side-link" data-action="import"><span data-icon="download"></span> <span data-i18n="side.import"></span></button>
@@ -89,15 +77,22 @@
               <span class="dev-badge" data-tooltip="Synthetic accounts. Actions are simulated; changes reset on reload.">DEV DATA</span>
               <button id="reset-demo" class="text-button">Reset demo</button>
             </div>
-            <span id="account-count" role="status"></span>
-            <button id="clear-filters" class="text-button" data-i18n="empty.clear" hidden></button>
+            <!-- The client's ranked "Next ladder update" countdown; clicking refreshes now. -->
+            <button class="ladder-update" id="schedule" data-i18n-title="refresh.idle" data-i18n-aria="refresh.idle">
+              <span class="ladder-update-label"></span><span class="ladder-update-time"></span>
+              <span class="ladder-update-icon" data-icon="refresh-cw"></span>
+            </button>
+            <!-- One line, with the button's space always reserved, so filtering never moves the layout. -->
+            <div class="summary-count">
+              <button id="clear-filters" class="text-button" data-i18n="empty.clear" hidden></button>
+              <span id="account-count" role="status"></span>
+            </div>
           </div>
         </header>
         <div class="toolbar">
           <label class="search">
             <span data-icon="search"></span>
             <input id="search" type="text" data-i18n-ph="toolbar.search" autocomplete="off" spellcheck="false" />
-            <kbd>Ctrl F</kbd>
           </label>
           <div class="select-wrap">
             <select id="region-filter" data-i18n-aria="sort.region"></select>

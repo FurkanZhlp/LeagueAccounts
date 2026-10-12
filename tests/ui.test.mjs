@@ -70,7 +70,9 @@ test("account collection, client frames and silent motion", { timeout: 180000 },
       await page.click('.mode-btn[data-mode="tft"]');
       assert.match(await text("#queue-label"), /Teamfight Tactics/i);
       await page.waitForFunction(() => [...document.querySelectorAll("#accounts .emblem img")].every(img => img.complete && img.naturalWidth > 0));
-      assert.equal(await page.$$eval("#accounts .emblem img", imgs => imgs.every(img => (img.src.endsWith("-tft.svg") || img.src.endsWith("/ranks/unranked.png")) && img.naturalWidth > 0)), true);
+      // The client renders RANKED_TFT with the same full emblems; mini crests stay in the sidebar.
+      assert.equal(await page.$$eval("#accounts .emblem img", imgs => imgs.every(img => /\/ranks\/\w+\.png$/.test(img.src) && img.naturalWidth > 0)), true);
+      assert.equal(await page.$$eval(".dist-emblem img", imgs => imgs.length > 0 && imgs.every(img => img.src.endsWith("-tft.svg") || img.src.endsWith("unranked-tft.svg") || img.src.endsWith("/crests/unranked.svg"))), true);
       await page.click('[data-view="list"]');
       await page.setViewport({ width: 980, height: 640 });
       await noHorizontalOverflow(".main");
@@ -207,6 +209,80 @@ test("account collection, client frames and silent motion", { timeout: 180000 },
       assert.equal(await page.$eval('[role="progressbar"]', el => el.getAttribute("aria-valuenow") === el.getAttribute("aria-valuemax")), true);
       await page.click('[data-login="close"]');
       await page.waitForSelector(".login-overlay", { hidden: true });
+    });
+    await t.test("framed dropdowns open flush under their frame, follow the keyboard and keep Escape", async () => {
+      await open();
+      const flyout = select => page.$eval(`${select} + .framed-dropdown .framed-dropdown-options`, (list, owner) => {
+        const frame = document.querySelector(owner).closest(".select-wrap").getBoundingClientRect();
+        const box = list.getBoundingClientRect();
+        return { open: list.matches(":popover-open"), top: Math.round(box.top), width: Math.round(box.width), frameBottom: Math.round(frame.bottom), frameWidth: Math.round(frame.width) };
+      }, select);
+      await page.click("#sort + .framed-dropdown .framed-dropdown-current");
+      const sort = await flyout("#sort");
+      assert.equal(sort.open, true);
+      assert.equal(sort.top, sort.frameBottom);
+      assert.equal(sort.width, sort.frameWidth);
+      await page.keyboard.press("ArrowDown");
+      await page.keyboard.press("Enter");
+      assert.equal((await flyout("#sort")).open, false);
+      assert.equal(await page.$eval("#sort", el => el.value), "name");
+      assert.equal(await text("#sort + .framed-dropdown .framed-dropdown-current"), "Name");
+      // The frame's own label opens its first dropdown; the division appears with a tier that has one.
+      assert.equal(await page.$eval("#friend-division + .framed-dropdown", el => getComputedStyle(el).display), "none");
+      await page.click("#friend-wrap .select-label");
+      assert.equal((await flyout("#friend-tier")).open, true);
+      await page.keyboard.type("dia");
+      await page.keyboard.press("Enter");
+      assert.equal(await page.$eval("#friend-tier", el => el.value), "Diamond");
+      assert.notEqual(await page.$eval("#friend-division + .framed-dropdown", el => getComputedStyle(el).display), "none");
+      await page.click('[data-action="settings"]');
+      await page.waitForSelector(".modal .framed-dropdown-current");
+      await page.click(".modal .framed-dropdown-current");
+      await page.waitForSelector(".modal .framed-dropdown-options:popover-open");
+      await page.keyboard.press("Escape");
+      assert.equal(await page.$(".framed-dropdown-options:popover-open"), null);
+      assert.notEqual(await page.$(".modal"), null);
+      await page.keyboard.press("Escape");
+      await page.waitForSelector(".modal", { hidden: true });
+    });
+    await t.test("long tier names fit the narrowest cards", async () => {
+      await open("main", { width: 1165, height: 760 });
+      // German has the longest single-word tier name ("HERAUSFORDERER"); switch through Settings.
+      await page.click('[data-action="settings"]');
+      await page.waitForSelector(".modal .framed-dropdown-current");
+      await page.click(".modal .framed-dropdown-current");
+      await page.keyboard.type("deu");
+      await page.keyboard.press("Enter");
+      await page.click('.modal [data-value="save"]');
+      await page.waitForSelector(".modal", { hidden: true });
+      await page.waitForFunction(() => [...document.querySelectorAll("#accounts .rank-name")].some(name => name.textContent.includes("Herausforderer")));
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      const names = await page.$$eval("#accounts .rank-name", els => els.map(el => ({ text: el.textContent, fits: el.scrollWidth <= el.clientWidth, size: parseFloat(getComputedStyle(el).fontSize) })));
+      for (const name of names) {
+        assert.ok(name.fits, `${name.text} overflows its column`);
+        assert.ok(name.size >= 13, `${name.text} shrank to ${name.size}px`);
+      }
+      assert.ok(names.some(name => name.size < 20), "the narrowest cards should need to shrink a long name");
+    });
+    await t.test("filtering keeps the layout still; the header countdown refreshes silently", async () => {
+      await open();
+      const layout = () => page.evaluate(() => {
+        const box = selector => { const r = document.querySelector(selector).getBoundingClientRect(); return [r.x, r.y, r.width, r.height].map(Math.round); };
+        return { header: box(".collection-header"), toolbar: box(".toolbar"), card: box("#accounts > .card"), gridWidth: box("#accounts")[2], countRight: Math.round(document.querySelector("#account-count").getBoundingClientRect().right) };
+      });
+      const before = await layout();
+      assert.equal(await page.$eval(".main", el => el.scrollHeight > el.clientHeight), true);
+      await page.type("#search", "Piltover");
+      assert.equal(await count(), 1);
+      assert.equal(await page.$eval(".main", el => el.scrollHeight > el.clientHeight), false);
+      assert.deepEqual(await layout(), before);
+      await page.click("#clear-filters");
+      assert.deepEqual(await layout(), before);
+      assert.match(await text("#schedule"), /Next rank update:\s*\d+:\d{2}/i);
+      await page.click("#schedule");
+      await page.waitForSelector("#schedule.running");
+      await page.waitForSelector("#schedule:not(.running)", { timeout: 60000 });
+      assert.equal(await page.$(".toast"), null);
     });
     assert.deepEqual(errors, []);
   } finally {

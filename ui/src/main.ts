@@ -9,6 +9,8 @@ import { openLoginOverlay, type LoginOverlay } from "./login";
 import { LANGUAGES, applyStatic, errorText, lang, localizeRank, setLang, t, tierName, type Lang, type MessageKey } from "./i18n";
 import { $, closeMenu, contextMenu, esc, fragment, leave, modal, reducedMotion, toast } from "./dom";
 import { hydrateIcons, icon } from "./icons";
+import { observeSelects } from "./dropdown";
+import { watchTierNames } from "./fit";
 import { wireControlMotion } from "./motion";
 import { wireTooltips } from "./tooltips";
 import { failStartup, revealApp } from "./startup";
@@ -474,9 +476,8 @@ function openMenu(account: AccountView, x: number, y: number): void {
       run: () => void guard(() => api.openProfile(keyOf(account), state.mode === "tft"), "toast.openFailed"),
     }] : []),
     { label: t("menu.edit"), icon: "pencil", run: () => void editAccount(account) },
-    "sep",
-    { label: t("menu.delete"), icon: "trash", danger: true, hint: "Del", run: () => void deleteAccount(account) },
-  ], "account");
+    { label: t("menu.delete"), icon: "trash", danger: true, run: () => void deleteAccount(account) },
+  ]);
 }
 
 async function refreshAll(): Promise<void> {
@@ -549,41 +550,39 @@ async function checkUpdateNow(button: HTMLButtonElement, output: HTMLElement): P
 
 // ---------------------------------------------------------------- schedule & settings
 
+/** "h:mm:ss" or "m:ss", like the client's ladder-update countdown. */
+function countdown(ms: number): string {
+  const seconds = Math.max(0, Math.ceil(ms / 1000));
+  const pad = (value: number) => String(value).padStart(2, "0");
+  const [h, m, s] = [Math.floor(seconds / 3600), Math.floor((seconds % 3600) / 60), seconds % 60];
+  return h ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+}
+
+/** Header countdown: "NEXT RANK UPDATE: 22:41", "REFRESHING RANKS 3/11", or "AUTO REFRESH IS OFF". */
 function renderSchedule(): void {
   const root = $<HTMLButtonElement>("#schedule");
   const schedule = state.schedule;
   const running = Boolean(schedule?.running || state.refreshing);
-  let text: string;
-  let progress = 0;
+  const remaining = schedule?.nextAt ? schedule.nextAt - Date.now() : 0;
+  let label: string;
+  let time = "";
   if (running) {
-    text = state.refreshTotal
-      ? t("refresh.busy", { done: state.refreshDone, total: state.refreshTotal })
-      : t("schedule.running");
-    progress = state.refreshTotal ? state.refreshDone / state.refreshTotal : 1;
+    label = t("schedule.running").replace(/…$/, "");
+    if (state.refreshTotal) time = `${state.refreshDone}/${state.refreshTotal}`;
   } else if (!schedule || !schedule.enabled) {
-    text = t("schedule.off");
-  } else if (schedule.nextAt) {
-    const remaining = schedule.nextAt - Date.now();
-    const total = schedule.intervalMinutes * 60_000;
-    progress = Math.min(1, Math.max(0, 1 - remaining / total));
-    if (remaining <= 30_000) {
-      text = t("schedule.soon");
-    } else {
-      const minutes = Math.round(remaining / 60_000);
-      const relative = new Intl.RelativeTimeFormat(lang(), { numeric: "auto" });
-      text = t("schedule.next", {
-        time: minutes >= 60 ? relative.format(Math.round(minutes / 60), "hour") : `${Math.max(1, minutes)} ${t("settings.minutes")}`,
-      });
-    }
+    label = t("schedule.off");
+  } else if (remaining > 1000) {
+    label = `${t("schedule.nextLabel")}:`;
+    time = countdown(remaining);
   } else {
-    text = t("schedule.soon");
+    label = t("schedule.soon");
   }
   root.classList.toggle("off", !schedule?.enabled && !running);
   root.classList.toggle("running", running);
   root.disabled = running;
   root.setAttribute("aria-busy", String(running));
-  root.style.setProperty("--p", String(progress));
-  $(".schedule-text", root).textContent = text;
+  $(".ladder-update-label", root).textContent = label;
+  $(".ladder-update-time", root).textContent = time;
 }
 
 async function openSettings(): Promise<void> {
@@ -952,20 +951,6 @@ function applyLanguage(): void {
   friendTier.value = selectedTier;
 }
 
-function openLangMenu(): void {
-  const rect = $("#lang").getBoundingClientRect();
-  contextMenu(
-    rect.left,
-    rect.bottom + 6,
-    LANGUAGES.map((language) => ({
-      label: language.name,
-      icon: language.code === lang() ? "check" : "languages",
-      run: () => changeLanguage(language.code),
-    })),
-    "language",
-  );
-}
-
 function changeLanguage(next: Lang): void {
   if (next === lang()) return;
   setLang(next);
@@ -1023,7 +1008,6 @@ function wire(): void {
 
   $("#schedule").addEventListener("click", () => void refreshAll());
   $("#open-add").addEventListener("click", () => openAddDrawer());
-  $("#lang").addEventListener("click", openLangMenu);
   document.querySelectorAll<HTMLButtonElement>("[data-action]").forEach((button) => {
     button.addEventListener("click", () => {
       const action = button.dataset.action;
@@ -1248,15 +1232,14 @@ async function wireEvents(): Promise<void> {
     renderDistribution();
     renderSchedule();
   });
-  await events.onRefreshDone(({ error, exclusive, auto }) => {
+  await events.onRefreshDone(({ error, exclusive }) => {
     if (error) toast("error", t("toast.ranksSaveFailed"), describe(new ApiError(error.code, error.detail)), 5000);
     // Only a full refresh ends the progress state; single-account refreshes
     // (after adding or renaming) may finish while it is still running.
+    // Success is silent: the cards and the header countdown already show it.
     if (exclusive && state.refreshing) {
       state.refreshing = false;
       state.pending.clear();
-      if (!error && auto) toast("info", t("toast.autoRefreshed"), t("toast.ranksUpdatedText", { count: state.refreshTotal }), 2600);
-      else if (!error) toast("success", t("toast.ranksUpdated"), t("toast.ranksUpdatedText", { count: state.refreshTotal }));
     }
     render();
   });
@@ -1320,9 +1303,11 @@ async function start(): Promise<void> {
   if (!boot.loggingAvailable) toast("info", t("toast.noLogging"), t("toast.noLoggingText"));
   await Promise.all([wireEvents(), IN_TAURI ? wireWindow() : Promise.resolve()]);
   renderSchedule();
-  setInterval(renderSchedule, 20_000);
+  setInterval(renderSchedule, 1000);
   await revealApp();
   if (!IN_TAURI && import.meta.env.DEV) runDemoScene();
 }
 
+observeSelects();
+watchTierNames();
 void start().catch(failStartup);
