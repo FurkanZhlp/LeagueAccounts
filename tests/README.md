@@ -40,10 +40,9 @@ The signed-out `PendingLoginStrategy` and signed-in `PendingProductContext`
 responses are documented in [these desktop client observations](https://github.com/ArtemChig/LeagueSwitcher/blob/main/docs/RESEARCH.md).
 These fixtures do not replace testing against the installed Riot Client.
 
-Update tests verify signatures against fixtures in `tests/fixtures/update`,
-signed with a throwaway key whose private half is not kept: the embedded key,
-the signed version and tampered files. They also cover asset selection, the
-executable swap and its rollback, cleanup of leftovers, restart arguments and
+Update tests cover asset selection (own release URLs, size and the SHA-256
+`digest` GitHub reports), rejection of a download that doesn't match the digest,
+the executable swap and its rollback, cleanup of leftovers, restart arguments and
 waiting for the previous process. `tests/update.test.mjs` drives the launch
 update screen, the restart notice and the download banner through the browser
 mock. The end-to-end procedure on Windows is in

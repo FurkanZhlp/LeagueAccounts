@@ -1,5 +1,5 @@
 //! Automatic updates: while they are on, check at launch and every few hours,
-//! install the signed release executable in the background, and restart into
+//! install the release executable in the background, and restart into
 //! it when the UI reports the app is idle (or right away from the launch update
 //! screen). When they are off, only Settings › Check now contacts GitHub.
 //!
@@ -125,7 +125,6 @@ impl Drop for Busy {
 
 struct Install {
     busy: Busy,
-    release: Release,
     download: Download,
     paths: Paths,
 }
@@ -164,7 +163,6 @@ fn check(app: &AppHandle, shared: &Arc<Shared>, launch: bool) -> Result<Option<I
         {
             release.executable.clone().map(|download| Install {
                 busy,
-                release: release.clone(),
                 download,
                 paths: paths.clone(),
             })
@@ -218,8 +216,7 @@ fn download_and_swap(app: &AppHandle, job: &Install) -> Result<(), (Event, Updat
     .map_err(failed)?;
     drop(file);
     logging::record(Event::UpdateDownloaded, Reason::None);
-    let signature = updates::signature(&job.download).map_err(failed)?;
-    updates::verify_file(&job.paths.staged, &signature, &job.release.version)
+    updates::verify_file(&job.paths.staged, &job.download.sha256)
         .map_err(|error| (Event::UpdateVerificationFailed, error))?;
     self_update::swap(&job.paths).map_err(|error| failed(error.into()))
 }

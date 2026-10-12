@@ -1,10 +1,13 @@
 //! New-version check against the GitHub releases of the app's repository, and
-//! download and signature verification of the release executable.
+//! download and integrity check of the release executable.
+//!
+//! Releases are trusted because only the repository's maintainer can publish
+//! them; executables come only from its release assets over HTTPS, and must
+//! match the SHA-256 digest GitHub computed when they were uploaded.
 
 use crate::logging::Reason;
-use base64::Engine;
-use minisign_verify::{PublicKey, Signature};
 use serde::Serialize;
+use sha2::{Digest, Sha256};
 use std::fmt;
 use std::fs::File;
 use std::io::{self, Read, Write};
@@ -13,14 +16,9 @@ use std::time::Duration;
 
 /// `owner/name` of the repository whose releases are checked.
 pub const REPOSITORY: &str = "Tariolle/LeagueAccounts";
-/// The release asset that replaces the running executable, and its signature.
+/// The release asset that replaces the running executable.
 const EXECUTABLE_ASSET: &str = "LeagueAccounts.exe";
-const SIGNATURE_ASSET: &str = "LeagueAccounts.exe.sig";
-/// Base64 minisign public key written by `npx tauri signer generate` (the
-/// `.pub` file). Automatic installs stay off while it is empty.
-const PUBLIC_KEY: &str = include_str!("../leagueaccounts.key.pub");
 const MAX_EXECUTABLE_BYTES: u64 = 256 * 1024 * 1024;
-const MAX_SIGNATURE_BYTES: u64 = 4096;
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -30,7 +28,7 @@ pub struct Release {
     pub url: String,
     pub notes: String,
     pub published_at: String,
-    /// The signed executable, when the release carries one. Not sent to the UI.
+    /// The executable, when the release carries one. Not sent to the UI.
     #[serde(skip)]
     pub executable: Option<Download>,
 }
@@ -38,7 +36,8 @@ pub struct Release {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Download {
     pub url: String,
-    pub signature_url: String,
+    /// Lowercase hex SHA-256 from the asset's `digest`.
+    pub sha256: String,
     pub size: u64,
 }
 
@@ -48,10 +47,8 @@ pub enum UpdateError {
     Io(io::Error),
     /// Not the release, asset or size that was announced.
     Response,
-    /// Missing, malformed or untrusted signature.
-    Signature,
-    /// Validly signed, but for a different version than the release.
-    Version,
+    /// The download does not match the release's SHA-256 digest.
+    Checksum,
 }
 
 impl UpdateError {
@@ -61,8 +58,7 @@ impl UpdateError {
             Self::Request(error) => Reason::from_request(error),
             Self::Io(error) => Reason::from_error(error),
             Self::Response => Reason::ResponseBody,
-            Self::Signature => Reason::Signature,
-            Self::Version => Reason::VersionMismatch,
+            Self::Checksum => Reason::Checksum,
         }
     }
 }
@@ -73,8 +69,7 @@ impl fmt::Display for UpdateError {
             Self::Request(error) => error.fmt(f),
             Self::Io(error) => error.fmt(f),
             Self::Response => f.write_str("unexpected release download"),
-            Self::Signature => f.write_str("the download is not signed by this app's key"),
-            Self::Version => f.write_str("the download is signed for another version"),
+            Self::Checksum => f.write_str("the download does not match the release"),
         }
     }
 }
@@ -127,34 +122,26 @@ fn is_asset_url(url: &str) -> bool {
         return true;
     }
     #[cfg(debug_assertions)]
-    if let Some(feed) = debug_override("LEAGUEACCOUNTS_UPDATE_FEED") {
+    if let Some(feed) = debug_feed() {
         return feed.rsplit_once('/').is_some_and(|(base, _)| url.starts_with(&format!("{base}/")));
     }
     false
 }
 
-/// Debug builds only: `LEAGUEACCOUNTS_UPDATE_FEED` (a releases/latest JSON URL)
-/// and `LEAGUEACCOUNTS_UPDATE_KEY` let a local server stand in for GitHub.
+/// Debug builds only: `LEAGUEACCOUNTS_UPDATE_FEED`, a releases/latest JSON URL,
+/// lets a local server stand in for GitHub.
 #[cfg(debug_assertions)]
-fn debug_override(name: &str) -> Option<String> {
-    std::env::var(name).ok().filter(|value| !value.trim().is_empty())
+fn debug_feed() -> Option<String> {
+    std::env::var("LEAGUEACCOUNTS_UPDATE_FEED").ok().filter(|value| !value.trim().is_empty())
 }
 
 /// Debug builds replace their own executable only when pointed at a test feed.
 pub fn can_install() -> bool {
     #[cfg(debug_assertions)]
-    if debug_override("LEAGUEACCOUNTS_UPDATE_FEED").is_none() {
+    if debug_feed().is_none() {
         return false;
     }
-    !public_key().trim().is_empty()
-}
-
-fn public_key() -> String {
-    #[cfg(debug_assertions)]
-    if let Some(key) = debug_override("LEAGUEACCOUNTS_UPDATE_KEY") {
-        return key;
-    }
-    PUBLIC_KEY.to_owned()
+    true
 }
 
 fn client(timeout: Duration) -> Result<reqwest::blocking::Client, UpdateError> {
@@ -168,7 +155,7 @@ fn client(timeout: Duration) -> Result<reqwest::blocking::Client, UpdateError> {
 pub fn latest_release() -> Result<Option<Release>, UpdateError> {
     let url = format!("https://api.github.com/repos/{REPOSITORY}/releases/latest");
     #[cfg(debug_assertions)]
-    let url = debug_override("LEAGUEACCOUNTS_UPDATE_FEED").unwrap_or(url);
+    let url = debug_feed().unwrap_or(url);
     let response = client(Duration::from_secs(15))?
         .get(url)
         .header(reqwest::header::ACCEPT, "application/vnd.github+json")
@@ -199,22 +186,22 @@ fn parse_release(json: &serde_json::Value) -> Option<Release> {
 }
 
 fn executable_download(json: &serde_json::Value) -> Option<Download> {
-    let assets = json["assets"].as_array()?;
-    let asset = |name: &str| {
-        assets.iter().find(|asset| {
-            asset["name"].as_str() == Some(name)
-                && asset["state"].as_str().is_none_or(|state| state == "uploaded")
-        })
-    };
-    let (executable, signature) = (asset(EXECUTABLE_ASSET)?, asset(SIGNATURE_ASSET)?);
+    let executable = json["assets"].as_array()?.iter().find(|asset| {
+        asset["name"].as_str() == Some(EXECUTABLE_ASSET)
+            && asset["state"].as_str().is_none_or(|state| state == "uploaded")
+    })?;
     let url = executable["browser_download_url"].as_str().filter(|url| is_asset_url(url))?;
-    let signature_url = signature["browser_download_url"].as_str().filter(|url| is_asset_url(url))?;
     let size = executable["size"]
         .as_u64()
         .filter(|size| (1..=MAX_EXECUTABLE_BYTES).contains(size))?;
+    let sha256 = executable["digest"]
+        .as_str()?
+        .strip_prefix("sha256:")
+        .filter(|hex| hex.len() == 64 && hex.bytes().all(|byte| byte.is_ascii_hexdigit()))?
+        .to_ascii_lowercase();
     Some(Download {
         url: url.to_owned(),
-        signature_url: signature_url.to_owned(),
+        sha256,
         size,
     })
 }
@@ -250,62 +237,26 @@ pub fn download(download: &Download, file: &mut File, mut progress: impl FnMut(u
     Ok(())
 }
 
-/// The `.sig` asset: base64 text around a minisign signature.
-pub fn signature(download: &Download) -> Result<String, UpdateError> {
-    let response = client(Duration::from_secs(15))?
-        .get(&download.signature_url)
-        .send()?
-        .error_for_status()?;
-    let mut text = String::new();
-    response.take(MAX_SIGNATURE_BYTES + 1).read_to_string(&mut text)?;
-    if text.len() as u64 > MAX_SIGNATURE_BYTES {
-        return Err(UpdateError::Signature);
-    }
-    Ok(text)
-}
-
 /// Check the file on disk, the bytes that will be installed, against the
-/// embedded key, and that it was signed for `version` (`tauri signer sign
-/// --app-version`), so a release can never install an older or mislabeled build.
-pub fn verify_file(path: &Path, signature: &str, version: &str) -> Result<(), UpdateError> {
-    verify(File::open(path)?, signature, &public_key(), version)
+/// release's SHA-256 digest.
+pub fn verify_file(path: &Path, sha256: &str) -> Result<(), UpdateError> {
+    verify(File::open(path)?, sha256)
 }
 
-fn verify(mut data: impl Read, signature: &str, public_key: &str, version: &str) -> Result<(), UpdateError> {
-    let key = decode_base64(public_key)
-        .and_then(|text| PublicKey::decode(&text).ok())
-        .ok_or(UpdateError::Signature)?;
-    let signature = decode_base64(signature)
-        .and_then(|text| Signature::decode(&text).ok())
-        .ok_or(UpdateError::Signature)?;
-    let mut verifier = key.verify_stream(&signature).map_err(|_| UpdateError::Signature)?;
+fn verify(mut data: impl Read, sha256: &str) -> Result<(), UpdateError> {
+    let mut hasher = Sha256::new();
     let mut buffer = vec![0; 64 * 1024];
     loop {
         let read = data.read(&mut buffer)?;
         if read == 0 {
             break;
         }
-        verifier.update(&buffer[..read]);
+        hasher.update(&buffer[..read]);
     }
-    // Also verifies the trusted comment, which carries the signed version.
-    verifier.finalize().map_err(|_| UpdateError::Signature)?;
-    if signed_version(signature.trusted_comment()) != Some(version.trim_start_matches(['v', 'V'])) {
-        return Err(UpdateError::Version);
+    if format!("{:x}", hasher.finalize()) != sha256 {
+        return Err(UpdateError::Checksum);
     }
     Ok(())
-}
-
-fn decode_base64(text: &str) -> Option<String> {
-    let bytes = base64::engine::general_purpose::STANDARD.decode(text.trim()).ok()?;
-    String::from_utf8(bytes).ok()
-}
-
-/// "timestamp:1791820593\tfile:LeagueAccounts.exe\tversion:3.1.0" → "3.1.0".
-fn signed_version(trusted_comment: &str) -> Option<&str> {
-    trusted_comment
-        .split('\t')
-        .find_map(|field| field.strip_prefix("version:"))
-        .map(|version| version.trim_start_matches(['v', 'V']))
 }
 
 #[cfg(test)]
@@ -313,11 +264,8 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    const TEST_KEY: &str = include_str!("../tests/fixtures/update/test-key.pub");
-    const OTHER_KEY: &str = include_str!("../tests/fixtures/update/other-key.pub");
-    const PAYLOAD: &[u8] = include_bytes!("../tests/fixtures/update/payload.bin");
-    /// `tauri signer sign --app-version 9.9.9` of PAYLOAD with the test key.
-    const SIGNATURE: &str = include_str!("../tests/fixtures/update/payload.bin.sig");
+    /// SHA-256 of "League Accounts".
+    const DIGEST: &str = "8c73b4c826f32e9405326642db2d25f5013533bed5b4ec63d63535bdcfb7df65";
 
     #[test]
     fn compares_versions() {
@@ -337,8 +285,8 @@ mod tests {
         assert!(!is_release_url("https://evil.example/https://github.com/"));
     }
 
-    fn asset(name: &str, url: &str, size: u64) -> serde_json::Value {
-        json!({ "name": name, "state": "uploaded", "size": size, "browser_download_url": url })
+    fn asset(name: &str, url: &str, size: u64, digest: &str) -> serde_json::Value {
+        json!({ "name": name, "state": "uploaded", "size": size, "browser_download_url": url, "digest": digest })
     }
 
     fn release(assets: Vec<serde_json::Value>) -> serde_json::Value {
@@ -353,12 +301,11 @@ mod tests {
     }
 
     #[test]
-    fn selects_the_signed_executable_from_own_release_assets() {
+    fn selects_the_executable_and_its_digest_from_own_release_assets() {
         let base = format!("https://github.com/{REPOSITORY}/releases/download/v3.1.0");
         let parsed = parse_release(&release(vec![
-            asset("LeagueAccounts-setup.exe", &format!("{base}/LeagueAccounts-setup.exe"), 9),
-            asset(SIGNATURE_ASSET, &format!("{base}/{SIGNATURE_ASSET}"), 400),
-            asset(EXECUTABLE_ASSET, &format!("{base}/{EXECUTABLE_ASSET}"), 12_000_000),
+            asset("LeagueAccounts-setup.exe", &format!("{base}/LeagueAccounts-setup.exe"), 9, "sha256:00"),
+            asset(EXECUTABLE_ASSET, &format!("{base}/{EXECUTABLE_ASSET}"), 12_000_000, &format!("sha256:{}", DIGEST.to_uppercase())),
         ]))
         .unwrap();
         assert_eq!(parsed.version, "3.1.0");
@@ -366,7 +313,7 @@ mod tests {
             parsed.executable,
             Some(Download {
                 url: format!("{base}/{EXECUTABLE_ASSET}"),
-                signature_url: format!("{base}/{SIGNATURE_ASSET}"),
+                sha256: DIGEST.to_owned(),
                 size: 12_000_000,
             })
         );
@@ -375,48 +322,32 @@ mod tests {
     }
 
     #[test]
-    fn releases_without_a_trusted_signed_executable_only_notify() {
+    fn releases_without_a_verifiable_executable_only_notify() {
         let base = format!("https://github.com/{REPOSITORY}/releases/download/v3.1.0");
-        let exe = asset(EXECUTABLE_ASSET, &format!("{base}/{EXECUTABLE_ASSET}"), 12_000_000);
-        let sig = asset(SIGNATURE_ASSET, &format!("{base}/{SIGNATURE_ASSET}"), 400);
-        let elsewhere = asset(EXECUTABLE_ASSET, "https://evil.example/LeagueAccounts.exe", 12_000_000);
-        let mut uploading = exe.clone();
+        let url = format!("{base}/{EXECUTABLE_ASSET}");
+        let digest = format!("sha256:{DIGEST}");
+        let mut uploading = asset(EXECUTABLE_ASSET, &url, 12_000_000, &digest);
         uploading["state"] = json!("new");
-        let empty = asset(EXECUTABLE_ASSET, &format!("{base}/{EXECUTABLE_ASSET}"), 0);
-        for assets in [vec![exe.clone()], vec![sig.clone()], vec![elsewhere, sig.clone()], vec![uploading, sig.clone()], vec![empty, sig]] {
-            let parsed = parse_release(&release(assets)).unwrap();
+        let mut undigested = asset(EXECUTABLE_ASSET, &url, 12_000_000, &digest);
+        undigested.as_object_mut().unwrap().remove("digest");
+        for executable in [
+            asset(EXECUTABLE_ASSET, "https://evil.example/LeagueAccounts.exe", 12_000_000, &digest),
+            asset(EXECUTABLE_ASSET, &url, 0, &digest),
+            asset(EXECUTABLE_ASSET, &url, 12_000_000, &format!("sha512:{DIGEST}")),
+            asset(EXECUTABLE_ASSET, &url, 12_000_000, "sha256:not-hex"),
+            uploading,
+            undigested,
+        ] {
+            let parsed = parse_release(&release(vec![executable])).unwrap();
             assert_eq!(parsed.version, "3.1.0");
             assert_eq!(parsed.executable, None);
         }
     }
 
     #[test]
-    fn accepts_only_the_embedded_key_and_the_signed_version() {
-        verify(PAYLOAD, SIGNATURE, TEST_KEY, "9.9.9").unwrap();
-        verify(PAYLOAD, SIGNATURE, TEST_KEY, "v9.9.9").unwrap();
-
-        let mut tampered = PAYLOAD.to_vec();
-        tampered[0] ^= 1;
-        assert!(matches!(verify(&tampered[..], SIGNATURE, TEST_KEY, "9.9.9"), Err(UpdateError::Signature)));
-        assert!(matches!(verify(PAYLOAD, SIGNATURE, OTHER_KEY, "9.9.9"), Err(UpdateError::Signature)));
-        assert!(matches!(verify(PAYLOAD, SIGNATURE, TEST_KEY, "9.9.10"), Err(UpdateError::Version)));
-        assert!(matches!(verify(PAYLOAD, "not base64", TEST_KEY, "9.9.9"), Err(UpdateError::Signature)));
-        assert!(matches!(verify(PAYLOAD, SIGNATURE, "", "9.9.9"), Err(UpdateError::Signature)));
-    }
-
-    /// Run by the release workflow on the signed build, before it is uploaded.
-    #[test]
-    #[ignore = "needs a signed release build"]
-    fn release_artifact_verifies_with_the_embedded_key() {
-        let exe = std::env::var("LEAGUEACCOUNTS_RELEASE_EXE").expect("LEAGUEACCOUNTS_RELEASE_EXE is not set");
-        let signature = std::fs::read_to_string(format!("{exe}.sig")).unwrap();
-        assert!(!PUBLIC_KEY.trim().is_empty(), "leagueaccounts.key.pub is empty");
-        verify(File::open(&exe).unwrap(), &signature, PUBLIC_KEY, env!("CARGO_PKG_VERSION")).unwrap();
-    }
-
-    #[test]
-    fn a_signature_without_a_version_is_rejected() {
-        assert_eq!(signed_version("timestamp:1\tfile:LeagueAccounts.exe\tversion:3.1.0"), Some("3.1.0"));
-        assert_eq!(signed_version("timestamp:1\tfile:LeagueAccounts.exe"), None);
+    fn installs_only_a_download_matching_the_digest() {
+        verify(&b"League Accounts"[..], DIGEST).unwrap();
+        assert!(matches!(verify(&b"League Accounts!"[..], DIGEST), Err(UpdateError::Checksum)));
+        assert!(matches!(verify(&b""[..], DIGEST), Err(UpdateError::Checksum)));
     }
 }
