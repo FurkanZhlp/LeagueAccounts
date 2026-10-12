@@ -1,0 +1,14 @@
+/* Startup screen, loaded before the app module (Vite loads development styles
+   through JS). A linked file, not a <style> block: Tauri gives <style> elements
+   a CSP nonce, which disables the inline style attributes the interface uses. */
+html, body { margin: 0; min-height: 100%; background: #060e17; }
+body:not(.ready) { overflow: hidden; }
+body:not(.ready) > :not(#startup-loader) { visibility: hidden !important; pointer-events: none !important; }
+body:not(.ready) *, body:not(.ready) *::before, body:not(.ready) *::after { animation: none !important; transition: none !important; }
+#startup-loader { position: fixed; inset: 0; z-index: 2147483647; display: grid; place-items: center; background: #060e17; color: #cdbe91; font: 14px/1.5 "Segoe UI", sans-serif; }
+#startup-loader::before { content: ""; width: 40px; height: 40px; border-radius: 50%; background: url('/league/controls/spinner.png') center / 140% 140% no-repeat; mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1px)); animation: startup-spin 4s linear infinite !important; }
+#startup-loader[data-failed]::before { display: none; }
+#startup-error { max-width: 360px; padding: 24px; text-align: center; }
+#startup-retry { margin-top: 16px; padding: 8px 24px; border: 1px solid #785a28; background: #1e2328; color: #f0e6d2; font: inherit; cursor: pointer; }
+@keyframes startup-spin { to { transform: rotate(1turn); } }
+@media (prefers-reduced-motion: reduce) { #startup-loader::before { animation: none !important; } }
