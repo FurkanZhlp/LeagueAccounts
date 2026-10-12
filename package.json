@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "test": "node --test tests/riot_renderer.test.mjs",
-    "test:ui": "node --test --test-concurrency=1 tests/startup.test.mjs tests/ui.test.mjs",
+    "test:ui": "node --test --test-concurrency=1 tests/startup.test.mjs tests/ui.test.mjs tests/update.test.mjs",
     "assets:verify": "node scripts/league-assets.mjs",
     "build": "npm run assets:verify && tsc --noEmit && vite build",
     "tauri": "tauri",

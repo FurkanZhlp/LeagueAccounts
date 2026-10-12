@@ -13,6 +13,7 @@ pub mod logging;
 pub mod models;
 pub mod rank_fetcher;
 pub mod riot_client;
+pub mod self_update;
 pub mod updates;
 pub mod utils;
 

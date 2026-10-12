@@ -2,6 +2,7 @@
 //! scheduler.
 
 use crate::login_control::LoginControl;
+use crate::updater::Updater;
 use crate::views::{account_view, fail, fail_with, AppError, Key};
 use leagueaccounts::logging::{self, Event, Reason};
 use leagueaccounts::models::{Account, RankInfo};
@@ -30,8 +31,10 @@ pub struct Settings {
     pub login_method: LoginMethod,
     /// Launch the game for the current mode after signing in.
     pub launch_game: bool,
-    /// Check GitHub for new releases.
-    pub check_updates: bool,
+    /// Install new releases automatically; when off, only notify. Settings
+    /// from before automatic updates stored this as "check for updates".
+    #[serde(alias = "checkUpdates")]
+    pub auto_update: bool,
     /// Unix ms of the last completed full refresh (manual or automatic).
     pub last_full_refresh: u64,
 }
@@ -52,7 +55,7 @@ impl Default for Settings {
             start_minimized: false,
             login_method: LoginMethod::Riot,
             launch_game: true,
-            check_updates: true,
+            auto_update: true,
             last_full_refresh: 0,
         }
     }
@@ -93,6 +96,7 @@ pub struct Shared {
     pub refresh_running: Mutex<bool>,
     pub clipboard_generation: AtomicU64,
     pub login: Arc<LoginControl>,
+    pub updater: Updater,
     pub load_error: Option<AppError>,
 }
 
@@ -287,21 +291,17 @@ pub fn spawn_scheduler(app: AppHandle, shared: Arc<Shared>) {
     });
 }
 
-/// Check for a newer release shortly after start and then every few hours,
-/// emitting `update-available` when one exists.
-pub fn spawn_update_checker(app: AppHandle, shared: Arc<Shared>) {
-    thread::spawn(move || {
-        thread::sleep(Duration::from_secs(20));
-        loop {
-            let enabled = shared.settings.lock().map(|s| s.check_updates).unwrap_or(false);
-            if enabled {
-                if let Ok(Some(release)) = leagueaccounts::updates::latest_release() {
-                    if leagueaccounts::updates::is_newer(&release.version, env!("CARGO_PKG_VERSION")) {
-                        let _ = app.emit("update-available", release);
-                    }
-                }
-            }
-            thread::sleep(Duration::from_secs(6 * 60 * 60));
-        }
-    });
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn automatic_updates_default_on_and_keep_an_earlier_opt_out() {
+        let parse = |json: &str| serde_json::from_str::<Settings>(json).unwrap().auto_update;
+        assert!(parse("{}"));
+        assert!(!parse(r#"{"checkUpdates":false}"#));
+        assert!(!parse(r#"{"autoUpdate":false}"#));
+        let saved = serde_json::to_string(&Settings::default()).unwrap();
+        assert!(saved.contains(r#""autoUpdate":true"#) && !saved.contains("checkUpdates"));
+    }
 }

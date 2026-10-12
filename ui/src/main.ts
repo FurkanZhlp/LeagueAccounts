@@ -4,7 +4,7 @@ import "./login.css";
 import "./league.css";
 import "./client-controls.css";
 
-import { ApiError, accountLabel, api, events, keyId, keyOf, parseAccountLine, type AccountView, type Key, type Release, type Schedule, type Settings } from "./api";
+import { ApiError, accountLabel, api, events, keyId, keyOf, parseAccountLine, type AccountView, type Key, type Schedule, type Settings } from "./api";
 import { openLoginOverlay, type LoginOverlay } from "./login";
 import { LANGUAGES, applyStatic, errorText, lang, localizeRank, setLang, t, tierName, type Lang, type MessageKey } from "./i18n";
 import { $, closeMenu, contextMenu, esc, fragment, leave, modal, reducedMotion, toast } from "./dom";
@@ -14,6 +14,7 @@ import { watchTierNames } from "./fit";
 import { wireControlMotion } from "./motion";
 import { wireTooltips } from "./tooltips";
 import { failStartup, revealApp } from "./startup";
+import { checkUpdateNow, launchUpdate, showUpdateBanner, wireUpdates } from "./update";
 import {
   APEX,
   TIER_ORDER,
@@ -496,58 +497,6 @@ async function refreshAll(): Promise<void> {
   renderSchedule();
 }
 
-// ---------------------------------------------------------------- updates
-
-const DISMISSED_UPDATE = "leagueaccounts.dismissedUpdate";
-
-function showUpdate(release: Release, force = false): void {
-  try {
-    if (!force && localStorage.getItem(DISMISSED_UPDATE) === release.version) return;
-  } catch {
-    // Storage unavailable: show it.
-  }
-  document.querySelector(".update-banner")?.remove();
-  const banner = fragment(`
-    <div class="update-banner" role="status">
-      <div class="update-body">
-        <strong>${esc(t("update.available"))}</strong>
-        <span>${esc(t("update.text", { version: release.version }))}</span>
-      </div>
-      <button class="btn btn-primary" data-update="open">${icon("download", 15)}${esc(t("update.download"))}</button>
-      <button class="icon-btn" data-update="later" aria-label="${esc(t("update.later"))}" data-tooltip="${esc(t("update.later"))}">${icon("x")}</button>
-    </div>`);
-  $("#toasts").before(banner);
-  banner.addEventListener("click", (event) => {
-    const action = (event.target as HTMLElement).closest<HTMLElement>("[data-update]")?.dataset.update;
-    if (action === "open") void guard(() => api.openRelease(release.url), "toast.openFailed");
-    if (action === "later") {
-      try {
-        localStorage.setItem(DISMISSED_UPDATE, release.version);
-      } catch {
-        // Non-essential.
-      }
-      void leave(banner, "toast-out");
-    }
-  });
-}
-
-async function checkUpdateNow(button: HTMLButtonElement, output: HTMLElement): Promise<void> {
-  button.disabled = true;
-  output.textContent = "…";
-  const status = await guard(() => api.checkUpdate(), "toast.updateFailed");
-  button.disabled = false;
-  if (!status) {
-    output.textContent = "";
-    return;
-  }
-  if (status.newer && status.latest) {
-    output.textContent = t("update.text", { version: status.latest.version });
-    showUpdate(status.latest, true);
-  } else {
-    output.textContent = status.latest ? t("update.latest") : t("update.none");
-  }
-}
-
 // ---------------------------------------------------------------- schedule & settings
 
 /** "h:mm:ss" or "m:ss", like the client's ladder-update countdown. */
@@ -628,7 +577,7 @@ async function openSettings(): Promise<void> {
       </section>
       <section class="settings-section">
         <h3>${esc(t("settings.updates"))}</h3>
-        ${toggle("checkUpdates", current.checkUpdates, t("settings.checkUpdates"))}
+        ${toggle("autoUpdate", current.autoUpdate, t("settings.autoUpdate"), t("settings.autoUpdateHint"))}
         <div class="update-row">
           <span>${esc(t("settings.version", { version: $("#version").textContent?.replace(/^v/, "") ?? "" }))}</span>
           <span class="update-result"></span>
@@ -676,7 +625,7 @@ async function openSettings(): Promise<void> {
             launchAtStartup: checked("launchAtStartup"),
             loginMethod: $<HTMLInputElement>('[name="loginMethod"]:checked', root).value as Settings["loginMethod"],
             launchGame: checked("launchGame"),
-            checkUpdates: checked("checkUpdates"),
+            autoUpdate: checked("autoUpdate"),
           }),
         "toast.settingsFailed",
       );
@@ -1209,7 +1158,6 @@ async function wireWindow(): Promise<void> {
 
 async function wireEvents(): Promise<void> {
   await events.onLoginStep((step) => activeLogin?.step(step));
-  await events.onUpdateAvailable((release) => showUpdate(release));
   await events.onRefreshStarted(({ total }) => {
     state.refreshing = true;
     state.refreshTotal = total;
@@ -1247,6 +1195,10 @@ async function wireEvents(): Promise<void> {
 
 const IN_TAURI = "__TAURI_INTERNALS__" in window;
 
+/** An update restart waits while the user is doing something. */
+const uiBusy = (): boolean =>
+  Boolean(activeLogin || state.refreshing || document.querySelector(".overlay, .drawer-overlay, .login-overlay, .menu, .is-open"));
+
 /** Dev-only: `?scene=` opens a screen with demo data (used for README screenshots). */
 function runDemoScene(): void {
   document.querySelectorAll<HTMLButtonElement>("[data-win]").forEach((button) => {
@@ -1267,7 +1219,7 @@ function runDemoScene(): void {
     if (scene === "settings") void openSettings();
     if (scene === "add") openAddDrawer();
     if (scene === "login") void login(byName("Hextech"));
-    if (scene === "update") showUpdate({ version: "3.1.0", name: "v3.1.0", url: "", notes: "", publishedAt: "" }, true);
+    if (scene === "update") showUpdateBanner({ version: "3.1.0", name: "v3.1.0", url: "", notes: "", publishedAt: "" }, true);
     if (scene === "menu") {
       const card = document.querySelector<HTMLElement>("#accounts > .card:nth-child(2)")!;
       const rect = card.getBoundingClientRect();
@@ -1301,10 +1253,11 @@ async function start(): Promise<void> {
   render();
   if (boot.loadError) toast("error", t("toast.loadFailed"), errorText(boot.loadError.code, boot.loadError.detail), 8000);
   if (!boot.loggingAvailable) toast("info", t("toast.noLogging"), t("toast.noLoggingText"));
-  await Promise.all([wireEvents(), IN_TAURI ? wireWindow() : Promise.resolve()]);
+  await Promise.all([wireEvents(), wireUpdates({ busy: uiBusy }), IN_TAURI ? wireWindow() : Promise.resolve()]);
   renderSchedule();
   setInterval(renderSchedule, 1000);
-  await revealApp();
+  // An update found at launch shows the update screen instead of the app.
+  if (!(await launchUpdate(revealApp))) await revealApp();
   if (!IN_TAURI && import.meta.env.DEV) runDemoScene();
 }
 

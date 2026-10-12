@@ -1,0 +1,83 @@
+name: Release
+
+# Push a vX.Y.Z tag on a commit whose version files say X.Y.Z. The workflow
+# builds and signs LeagueAccounts.exe and creates a draft release with both
+# files; write the notes and publish it. Automatic updates read published
+# releases only, so nothing reaches users before that.
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install stable Rust
+        run: rustup toolchain install stable --profile minimal
+      - name: Check the tag, version files and update key
+        shell: bash
+        env:
+          SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          check() {
+            if [ "$2" != "$version" ]; then
+              echo "::error file=$1::$1 says $2 but the tag is $GITHUB_REF_NAME"
+              exit 1
+            fi
+          }
+          check package.json "$(node -p "require('./package.json').version")"
+          check src-tauri/tauri.conf.json "$(node -p "require('./src-tauri/tauri.conf.json').version")"
+          check Cargo.toml "$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
+          check src-tauri/Cargo.toml "$(sed -n 's/^version = "\(.*\)"/\1/p' src-tauri/Cargo.toml | head -1)"
+          if [ ! -s leagueaccounts.key.pub ]; then
+            echo "::error file=leagueaccounts.key.pub::Commit the update public key first (see README, Releasing)."
+            exit 1
+          fi
+          if [ -z "$SIGNING_KEY" ]; then
+            echo "::error::Add the TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD repository secrets."
+            exit 1
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+      - name: Install frontend dependencies
+        run: npm ci
+      - name: Unit and regression tests
+        run: cargo +stable test --locked --workspace --all-targets
+      # Builds the UI first (beforeBuildCommand), then the portable executable.
+      - name: Release build
+        run: npx tauri build --no-bundle
+      - name: Sign for automatic updates
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          mkdir release
+          cp target/release/LeagueAccounts.exe release/
+          # The version goes into the signed comment; the app installs only a
+          # signature made for the release it is installing.
+          npx tauri signer sign --app-version "$VERSION" release/LeagueAccounts.exe
+      - name: Verify with the key built into the app
+        shell: bash
+        env:
+          LEAGUEACCOUNTS_RELEASE_EXE: ${{ github.workspace }}/release/LeagueAccounts.exe
+        run: |
+          test=updates::tests::release_artifact_verifies_with_the_embedded_key
+          cargo +stable test --locked -p leagueaccounts --lib -- --ignored --exact "$test" | tee verify.log
+          # Fail if the test was renamed and nothing ran.
+          grep -q "test result: ok. 1 passed" verify.log
+      - name: Create a draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --draft --verify-tag --generate-notes \
+            --title "$GITHUB_REF_NAME" release/LeagueAccounts.exe release/LeagueAccounts.exe.sig
