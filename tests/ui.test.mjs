@@ -79,6 +79,37 @@ test("account collection, client frames and silent motion", { timeout: 180000 },
       assert.match(await text("#queue-label"), /Solo/);
       assert.equal(await count(), 11);
     });
+    await t.test("selected game tabs visibly respond to keyboard focus with either motion preference", async () => {
+      await open();
+      const appearance = selector => page.$eval(selector, el => ({
+        focused: el.matches(":focus-visible"),
+        selected: el.getAttribute("aria-selected"),
+        outline: getComputedStyle(el).outlineStyle,
+        paint: {
+          background: getComputedStyle(el).backgroundImage,
+          navigationLight: getComputedStyle(el, "::after").opacity,
+        },
+      }));
+      for (const motion of ["no-preference", "reduce"]) {
+        await page.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: motion }]);
+        for (const mode of ["lol", "tft"]) {
+          const selector = `.mode-btn[data-mode="${mode}"]`;
+          await page.click(selector);
+          await page.mouse.move(0, 90);
+          await page.keyboard.press("Tab");
+          const resting = await appearance(selector);
+          assert.equal(resting.focused, false);
+          await page.keyboard.down("Shift");
+          await page.keyboard.press("Tab");
+          await page.keyboard.up("Shift");
+          const focused = await appearance(selector);
+          assert.equal(focused.focused, true);
+          assert.equal(focused.selected, "true", "focusing a tab must preserve selection");
+          assert.equal(focused.outline, "none", "use the client's gold navigation light, not a generic outline");
+          assert.notDeepEqual(focused.paint, resting.paint, `${mode} focus must stay visible with ${motion}`);
+        }
+      }
+    });
     await t.test("Settings frame contains scrolling content while its actions and close stay reachable", async () => {
       await open("settings", { width: 980, height: 640 });
       await page.waitForSelector(".modal");

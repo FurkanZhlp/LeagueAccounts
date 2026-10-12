@@ -7,6 +7,7 @@ test("startup shows only the loading screen until the interface is ready", { tim
   try {
     await t.test("cold loads wait for app code, fonts, crests and CSS backgrounds", async () => {
       const page = await demo.browser.newPage();
+      await page.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: "no-preference" }]);
       await page.setCacheEnabled(false);
       await page.setRequestInterception(true);
       const blocked = new Set(["module", "font", "crest", "background"]);
@@ -40,7 +41,8 @@ test("startup shows only the loading screen until the interface is ready", { tim
         assert.equal(await page.$eval("#startup-loader", el => getComputedStyle(el, "::before").animationName), "startup-spin");
         await page.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: "reduce" }]);
         assert.equal(await page.$eval("#startup-loader", el => getComputedStyle(el, "::before").animationName), "none");
-        await page.emulateMediaFeatures([]);
+        await page.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: "no-preference" }]);
+        assert.equal(await page.$eval("#startup-loader", el => getComputedStyle(el, "::before").animationName), "startup-spin");
         await release("module");
         await page.waitForSelector("#accounts > .card");
         await page.waitForFunction(() => document.fonts.status === "loading");
