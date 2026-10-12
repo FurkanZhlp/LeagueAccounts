@@ -23,11 +23,11 @@
         "decorations": false,
         "visible": false,
         "shadow": true,
-        "backgroundColor": "#0a0d14"
+        "backgroundColor": "#060e17"
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src ipc: http://ipc.localhost"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; media-src 'self'; connect-src ipc: http://ipc.localhost"
     }
   },
   "bundle": {

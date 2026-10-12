@@ -1,21 +1,26 @@
-import "@fontsource-variable/inter";
-import "@fontsource/cinzel/600.css";
 import "./styles.css";
 import "./features.css";
 import "./login.css";
+import "./league.css";
+import "./client-controls.css";
 
-import { ApiError, accountLabel, api, events, keyId, keyOf, parseAccountLine, type AccountView, type Key, type Release, type Schedule, type Settings } from "./api";
+import { ApiError, accountLabel, api, events, keyId, keyOf, parseAccountLine, type AccountView, type Key, type Schedule, type Settings } from "./api";
 import { openLoginOverlay, type LoginOverlay } from "./login";
 import { LANGUAGES, applyStatic, errorText, lang, localizeRank, setLang, t, tierName, type Lang, type MessageKey } from "./i18n";
 import { $, closeMenu, contextMenu, esc, fragment, leave, modal, reducedMotion, toast } from "./dom";
 import { hydrateIcons, icon } from "./icons";
+import { observeSelects } from "./dropdown";
+import { watchTierNames } from "./fit";
+import { wireControlMotion } from "./motion";
+import { wireTooltips } from "./tooltips";
+import { failStartup, revealApp } from "./startup";
+import { checkUpdateNow, launchUpdate, showUpdateBanner, wireUpdates } from "./update";
 import {
   APEX,
   TIER_ORDER,
   canPlayWith,
   compareRanks,
   emblem,
-  installEmblemDefs,
   isRanked,
   lpProgress,
   normalizeTier,
@@ -51,7 +56,7 @@ const state = {
 
 // ---------------------------------------------------------------- preferences
 
-const PREFS_KEY = "leagueaccounts.prefs";
+const PREFS_KEY = import.meta.env.DEV ? "leagueaccounts.dev.prefs" : "leagueaccounts.prefs";
 
 function loadPrefs(): void {
   try {
@@ -125,36 +130,37 @@ function cardInner(account: AccountView, pending: boolean): string {
   const [gameName, tag] = splitRiotId(accountLabel(account));
   const lp = isRanked(rank) && rank.lp ? `<span class="lp">${esc(rank.lp)} LP</span>` : "";
   return `
-    <div class="card-sheen"></div>
     <div class="card-top">
-      <div class="emblem-wrap">${emblem(tier, 58)}</div>
       <div class="identity">
-        <div class="name" title="${esc(accountLabel(account))}">
+        <div class="name" data-tooltip="${esc(accountLabel(account))}">
           <span class="game-name">${esc(gameName)}</span>${tag ? `<span class="tag">#${esc(tag)}</span>` : ""}
         </div>
         <div class="meta">
           <span class="chip chip-region">${esc(account.regionDisplay)}</span>
-          ${account.level ? `<span class="chip">Lv ${esc(account.level)}</span>` : ""}
-          <span class="acc-id" title="${esc(t("card.accountId"))}">${icon("users", 12)}${esc(account.accountId)}</span>
+          ${account.level ? `<span class="chip chip-level">${esc(t("card.level"))} <b>${esc(account.level)}</b></span>` : ""}
+          <span class="acc-id" data-tooltip="${esc(t("card.accountId"))}">${icon("users", 12)}${esc(account.accountId)}</span>
         </div>
       </div>
-      <button class="icon-btn card-more" data-act="menu" title="${esc(t("card.more"))}">${icon("more")}</button>
+      <button class="icon-btn card-more" data-act="menu" aria-label="${esc(t("card.more"))}" data-tooltip="${esc(t("card.more"))}">${icon("more")}</button>
     </div>
-    <div class="rank-block${pending ? " is-pending" : ""}">
+    <div class="card-rank">
+      <div class="emblem-wrap">${emblem(tier, 132, state.mode)}</div>
+      <div class="rank-block${pending ? " is-pending" : ""}">
       ${!account.name || account.riotIdNotFound ? `
       <div class="rank-notice${account.riotIdNotFound ? " rank-not-found" : ""}">${esc(t(account.name ? "card.riotIdNotFound" : "card.noRiotId"))}</div>
       <button class="rank-edit" data-act="edit">${esc(t(account.name ? "card.updateRiotId" : "card.addRiotId"))}</button>` : `
-      <div class="rank-line">
-        <span class="rank-name">${esc(rankLabel(rank))}</span>${lp}
-      </div>
+      <div class="rank-line"><span class="rank-name">${esc(rankLabel(rank))}</span></div>
+      ${lp}
       <div class="lp-bar${APEX.has(tier) ? " apex" : ""}"><span style="--p:${lpProgress(rank)}"></span></div>
-      <div class="history">${historyLine(account)}</div>`}
+      `}
+      </div>
     </div>
-    ${account.description ? `<p class="desc" title="${esc(account.description)}">${esc(account.description)}</p>` : `<p class="desc desc-empty"></p>`}
+    ${account.name && !account.riotIdNotFound ? `<div class="history">${historyLine(account)}</div>` : ""}
+    ${account.description ? `<p class="desc" data-tooltip="${esc(account.description)}">${esc(account.description)}</p>` : `<p class="desc desc-empty"></p>`}
     <div class="card-actions">
-      <button class="btn btn-play" data-act="login" title="${esc(t("card.loginTitle"))}">${icon("login", 15)}${esc(t("card.login"))}</button>
-      <button class="icon-btn" data-act="copy-id" title="${esc(t("card.copyId"))}">${icon("copy", 15)}</button>
-      <button class="icon-btn" data-act="copy-pass" title="${esc(t("card.copyPassword"))}">${icon("key", 15)}</button>
+      <button class="btn btn-play" data-act="login" data-tooltip="${esc(t("card.loginTitle"))}">${icon("login", 15)}${esc(t("card.login"))}</button>
+      <button class="icon-btn" data-act="copy-id" aria-label="${esc(t("card.copyId"))}" data-tooltip="${esc(t("card.copyId"))}">${icon("copy", 15)}</button>
+      <button class="icon-btn" data-act="copy-pass" aria-label="${esc(t("card.copyPassword"))}" data-tooltip="${esc(t("card.copyPassword"))}">${icon("key", 15)}</button>
     </div>`;
 }
 
@@ -185,14 +191,12 @@ let firstRender = true;
 function renderAccounts(): void {
   const container = $("#accounts");
   const list = visibleAccounts();
+  $("#account-count").textContent = t("page.count", { shown: list.length, total: state.accounts.length });
+  $("#clear-filters").hidden = !state.search && state.regionFilter === "all" && !state.tierFilter && (state.mode === "tft" || state.friendTier === "all");
   const existing = new Map<string, HTMLElement>();
   container.querySelectorAll<HTMLElement>(":scope > .card").forEach((element) => {
     existing.set(element.dataset.key ?? "", element);
   });
-
-  // FLIP: remember where every card was before reordering.
-  const before = new Map<string, DOMRect>();
-  if (!reducedMotion()) existing.forEach((element, id) => before.set(id, element.getBoundingClientRect()));
 
   const wanted = new Set(list.map((account) => keyId(keyOf(account))));
   existing.forEach((element, id) => {
@@ -215,23 +219,14 @@ function renderAccounts(): void {
       });
     }
     updateCard(element, account);
-    if (container.children[index] !== element) container.insertBefore(element, container.children[index] ?? null);
+    if (container.children[index] !== element) {
+      container.insertBefore(element, container.children[index] ?? null);
+      if (existing.has(id) && !reducedMotion()) {
+        element.getAnimations().forEach(animation => animation.cancel());
+        element.animate([{ opacity: .4 }, { opacity: 1 }], { duration: 200, easing: "linear" });
+      }
+    }
   });
-
-  if (!reducedMotion()) {
-    container.querySelectorAll<HTMLElement>(":scope > .card").forEach((element) => {
-      const old = before.get(element.dataset.key ?? "");
-      if (!old) return;
-      const now = element.getBoundingClientRect();
-      const dx = old.left - now.left;
-      const dy = old.top - now.top;
-      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
-      element.animate(
-        [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "translate(0, 0)" }],
-        { duration: 420, easing: "cubic-bezier(.2,.8,.2,1)" },
-      );
-    });
-  }
   firstRender = false;
 
   const empty = $("#empty");
@@ -239,7 +234,7 @@ function renderAccounts(): void {
   if (!list.length) {
     const noAccounts = state.accounts.length === 0;
     empty.innerHTML = `
-      <div class="empty-art">${emblem(noAccounts ? "Unranked" : "Iron", 88)}</div>
+      <div class="empty-art"><img src="/league/icons/empty-poro.svg" width="88" height="88" alt="" /></div>
       <h2>${t(noAccounts ? "empty.noneTitle" : "empty.noMatchTitle")}</h2>
       <p>${t(noAccounts ? "empty.noneText" : "empty.noMatchText")}</p>
       ${
@@ -266,8 +261,8 @@ function renderDistribution(): void {
       const count = counts.get(tier) ?? 0;
       const colors = palette(tier);
       const active = state.tierFilter === tier;
-      return `<button class="dist-row${active ? " active" : ""}${count ? "" : " zero"}" data-tier="${tier}" style="--tier:${colors.base};--w:${count / max}" ${count ? "" : "disabled"}>
-        <span class="dist-emblem">${emblem(tier, 20)}</span>
+      return `<button class="dist-row${active ? " active" : ""}${count ? "" : " zero"}" data-tier="${tier}" aria-pressed="${active}" style="--tier:${colors.base};--w:${count / max}" ${count ? "" : "disabled"}>
+        <span class="dist-emblem">${emblem(tier, 20, state.mode)}</span>
         <span class="dist-name">${tierName(tier)}</span>
         <span class="dist-bar"><span></span></span>
         <span class="dist-count">${count}</span>
@@ -278,6 +273,7 @@ function renderDistribution(): void {
 
 function renderControls(): void {
   document.documentElement.dataset.mode = state.mode;
+  $("#queue-label").textContent = t(state.mode === "lol" ? "page.queueLol" : "page.queueTft");
   document.querySelectorAll<HTMLButtonElement>(".mode-btn").forEach((button) => {
     button.setAttribute("aria-selected", String(button.dataset.mode === state.mode));
   });
@@ -452,7 +448,7 @@ async function deleteAccount(account: AccountView): Promise<void> {
     title: t("delete.title"),
     body: `
       <div class="confirm-account">
-        ${emblem(rankOf(account, state.mode).tier, 44)}
+        ${emblem(rankOf(account, state.mode).tier, 44, state.mode)}
         <div><strong>${esc(accountLabel(account))}</strong><span>${esc(account.accountId)} · ${esc(account.regionDisplay)}</span></div>
       </div>
       <p class="hint">${t("delete.hint")}</p>`,
@@ -481,9 +477,8 @@ function openMenu(account: AccountView, x: number, y: number): void {
       run: () => void guard(() => api.openProfile(keyOf(account), state.mode === "tft"), "toast.openFailed"),
     }] : []),
     { label: t("menu.edit"), icon: "pencil", run: () => void editAccount(account) },
-    "sep",
-    { label: t("menu.delete"), icon: "trash", danger: true, hint: "Del", run: () => void deleteAccount(account) },
-  ], "account");
+    { label: t("menu.delete"), icon: "trash", danger: true, run: () => void deleteAccount(account) },
+  ]);
 }
 
 async function refreshAll(): Promise<void> {
@@ -502,95 +497,41 @@ async function refreshAll(): Promise<void> {
   renderSchedule();
 }
 
-// ---------------------------------------------------------------- updates
-
-const DISMISSED_UPDATE = "leagueaccounts.dismissedUpdate";
-
-function showUpdate(release: Release, force = false): void {
-  try {
-    if (!force && localStorage.getItem(DISMISSED_UPDATE) === release.version) return;
-  } catch {
-    // Storage unavailable: show it.
-  }
-  document.querySelector(".update-banner")?.remove();
-  const banner = fragment(`
-    <div class="update-banner" role="status">
-      <div class="update-body">
-        <strong>${esc(t("update.available"))}</strong>
-        <span>${esc(t("update.text", { version: release.version }))}</span>
-      </div>
-      <button class="btn btn-primary" data-update="open">${icon("download", 15)}${esc(t("update.download"))}</button>
-      <button class="icon-btn" data-update="later" title="${esc(t("update.later"))}">${icon("x")}</button>
-    </div>`);
-  $("#toasts").before(banner);
-  banner.addEventListener("click", (event) => {
-    const action = (event.target as HTMLElement).closest<HTMLElement>("[data-update]")?.dataset.update;
-    if (action === "open") void guard(() => api.openRelease(release.url), "toast.openFailed");
-    if (action === "later") {
-      try {
-        localStorage.setItem(DISMISSED_UPDATE, release.version);
-      } catch {
-        // Non-essential.
-      }
-      void leave(banner, "toast-out");
-    }
-  });
-}
-
-async function checkUpdateNow(button: HTMLButtonElement, output: HTMLElement): Promise<void> {
-  button.disabled = true;
-  output.textContent = "…";
-  const status = await guard(() => api.checkUpdate(), "toast.updateFailed");
-  button.disabled = false;
-  if (!status) {
-    output.textContent = "";
-    return;
-  }
-  if (status.newer && status.latest) {
-    output.textContent = t("update.text", { version: status.latest.version });
-    showUpdate(status.latest, true);
-  } else {
-    output.textContent = status.latest ? t("update.latest") : t("update.none");
-  }
-}
-
 // ---------------------------------------------------------------- schedule & settings
 
+/** "h:mm:ss" or "m:ss", like the client's ladder-update countdown. */
+function countdown(ms: number): string {
+  const seconds = Math.max(0, Math.ceil(ms / 1000));
+  const pad = (value: number) => String(value).padStart(2, "0");
+  const [h, m, s] = [Math.floor(seconds / 3600), Math.floor((seconds % 3600) / 60), seconds % 60];
+  return h ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+}
+
+/** Header countdown: "NEXT RANK UPDATE: 22:41", "REFRESHING RANKS 3/11", or "AUTO REFRESH IS OFF". */
 function renderSchedule(): void {
   const root = $<HTMLButtonElement>("#schedule");
   const schedule = state.schedule;
   const running = Boolean(schedule?.running || state.refreshing);
-  let text: string;
-  let progress = 0;
+  const remaining = schedule?.nextAt ? schedule.nextAt - Date.now() : 0;
+  let label: string;
+  let time = "";
   if (running) {
-    text = state.refreshTotal
-      ? t("refresh.busy", { done: state.refreshDone, total: state.refreshTotal })
-      : t("schedule.running");
-    progress = state.refreshTotal ? state.refreshDone / state.refreshTotal : 1;
+    label = t("schedule.running").replace(/…$/, "");
+    if (state.refreshTotal) time = `${state.refreshDone}/${state.refreshTotal}`;
   } else if (!schedule || !schedule.enabled) {
-    text = t("schedule.off");
-  } else if (schedule.nextAt) {
-    const remaining = schedule.nextAt - Date.now();
-    const total = schedule.intervalMinutes * 60_000;
-    progress = Math.min(1, Math.max(0, 1 - remaining / total));
-    if (remaining <= 30_000) {
-      text = t("schedule.soon");
-    } else {
-      const minutes = Math.round(remaining / 60_000);
-      const relative = new Intl.RelativeTimeFormat(lang(), { numeric: "auto" });
-      text = t("schedule.next", {
-        time: minutes >= 60 ? relative.format(Math.round(minutes / 60), "hour") : `${Math.max(1, minutes)} ${t("settings.minutes")}`,
-      });
-    }
+    label = t("schedule.off");
+  } else if (remaining > 1000) {
+    label = `${t("schedule.nextLabel")}:`;
+    time = countdown(remaining);
   } else {
-    text = t("schedule.soon");
+    label = t("schedule.soon");
   }
   root.classList.toggle("off", !schedule?.enabled && !running);
   root.classList.toggle("running", running);
   root.disabled = running;
   root.setAttribute("aria-busy", String(running));
-  root.style.setProperty("--p", String(progress));
-  $(".schedule-text", root).textContent = text;
+  $(".ladder-update-label", root).textContent = label;
+  $(".ladder-update-time", root).textContent = time;
 }
 
 async function openSettings(): Promise<void> {
@@ -636,7 +577,7 @@ async function openSettings(): Promise<void> {
       </section>
       <section class="settings-section">
         <h3>${esc(t("settings.updates"))}</h3>
-        ${toggle("checkUpdates", current.checkUpdates, t("settings.checkUpdates"))}
+        ${toggle("autoUpdate", current.autoUpdate, t("settings.autoUpdate"), t("settings.autoUpdateHint"))}
         <div class="update-row">
           <span>${esc(t("settings.version", { version: $("#version").textContent?.replace(/^v/, "") ?? "" }))}</span>
           <span class="update-result"></span>
@@ -684,7 +625,7 @@ async function openSettings(): Promise<void> {
             launchAtStartup: checked("launchAtStartup"),
             loginMethod: $<HTMLInputElement>('[name="loginMethod"]:checked', root).value as Settings["loginMethod"],
             launchGame: checked("launchGame"),
-            checkUpdates: checked("checkUpdates"),
+            autoUpdate: checked("autoUpdate"),
           }),
         "toast.settingsFailed",
       );
@@ -732,7 +673,7 @@ function openAddDrawer(tab: "single" | "multi" = "single"): void {
             <label class="field"><span>${t("add.password")}</span>
               <div class="password">
                 <input name="password" type="password" autocomplete="new-password" />
-                <button type="button" class="icon-btn" data-reveal title="${esc(t("add.show"))}">${icon("eye", 15)}</button>
+                <button type="button" class="icon-btn" data-reveal aria-label="${esc(t("add.show"))}" data-tooltip="${esc(t("add.show"))}">${icon("eye", 15)}</button>
               </div></label>
             <label class="field"><span>${t("edit.description")} <em>${t("add.optional")}</em></span>
               <input name="description" autocomplete="off" placeholder="${esc(t("edit.descriptionPh"))}" /></label>
@@ -959,20 +900,6 @@ function applyLanguage(): void {
   friendTier.value = selectedTier;
 }
 
-function openLangMenu(): void {
-  const rect = $("#lang").getBoundingClientRect();
-  contextMenu(
-    rect.left,
-    rect.bottom + 6,
-    LANGUAGES.map((language) => ({
-      label: language.name,
-      icon: language.code === lang() ? "check" : "languages",
-      run: () => changeLanguage(language.code),
-    })),
-    "language",
-  );
-}
-
 function changeLanguage(next: Lang): void {
   if (next === lang()) return;
   setLang(next);
@@ -983,6 +910,7 @@ function changeLanguage(next: Lang): void {
 // ---------------------------------------------------------------- wiring
 
 function wire(): void {
+  $("#clear-filters").addEventListener("click", clearFilters);
   document.querySelectorAll<HTMLButtonElement>(".mode-btn").forEach((button) => {
     button.addEventListener("click", () => setMode(button.dataset.mode as Mode));
   });
@@ -1029,7 +957,6 @@ function wire(): void {
 
   $("#schedule").addEventListener("click", () => void refreshAll());
   $("#open-add").addEventListener("click", () => openAddDrawer());
-  $("#lang").addEventListener("click", openLangMenu);
   document.querySelectorAll<HTMLButtonElement>("[data-action]").forEach((button) => {
     button.addEventListener("click", () => {
       const action = button.dataset.action;
@@ -1083,14 +1010,6 @@ function wire(): void {
     if (!account) return;
     event.preventDefault();
     openMenu(account, event.clientX, event.clientY);
-  });
-  // Pointer-tracked highlight on cards.
-  accounts.addEventListener("pointermove", (event) => {
-    const card = (event.target as HTMLElement).closest<HTMLElement>(".card");
-    if (!card) return;
-    const rect = card.getBoundingClientRect();
-    card.style.setProperty("--mx", `${event.clientX - rect.left}px`);
-    card.style.setProperty("--my", `${event.clientY - rect.top}px`);
   });
 
   document.addEventListener("contextmenu", (event) => {
@@ -1226,7 +1145,7 @@ async function wireWindow(): Promise<void> {
   const { getCurrentWindow } = await import("@tauri-apps/api/window");
   const appWindow = getCurrentWindow();
   const buttons: Record<string, [string, () => Promise<void>]> = {
-    minimize: ["minus", () => appWindow.minimize()],
+    minimize: ["window-hide", () => appWindow.minimize()],
     maximize: ["square", () => appWindow.toggleMaximize()],
     close: ["x", () => appWindow.close()],
   };
@@ -1239,7 +1158,6 @@ async function wireWindow(): Promise<void> {
 
 async function wireEvents(): Promise<void> {
   await events.onLoginStep((step) => activeLogin?.step(step));
-  await events.onUpdateAvailable((release) => showUpdate(release));
   await events.onRefreshStarted(({ total }) => {
     state.refreshing = true;
     state.refreshTotal = total;
@@ -1262,15 +1180,14 @@ async function wireEvents(): Promise<void> {
     renderDistribution();
     renderSchedule();
   });
-  await events.onRefreshDone(({ error, exclusive, auto }) => {
+  await events.onRefreshDone(({ error, exclusive }) => {
     if (error) toast("error", t("toast.ranksSaveFailed"), describe(new ApiError(error.code, error.detail)), 5000);
     // Only a full refresh ends the progress state; single-account refreshes
     // (after adding or renaming) may finish while it is still running.
+    // Success is silent: the cards and the header countdown already show it.
     if (exclusive && state.refreshing) {
       state.refreshing = false;
       state.pending.clear();
-      if (!error && auto) toast("info", t("toast.autoRefreshed"), t("toast.ranksUpdatedText", { count: state.refreshTotal }), 2600);
-      else if (!error) toast("success", t("toast.ranksUpdated"), t("toast.ranksUpdatedText", { count: state.refreshTotal }));
     }
     render();
   });
@@ -1278,10 +1195,14 @@ async function wireEvents(): Promise<void> {
 
 const IN_TAURI = "__TAURI_INTERNALS__" in window;
 
+/** An update restart waits while the user is doing something. */
+const uiBusy = (): boolean =>
+  Boolean(activeLogin || state.refreshing || document.querySelector(".overlay, .drawer-overlay, .login-overlay, .menu, .is-open"));
+
 /** Dev-only: `?scene=` opens a screen with demo data (used for README screenshots). */
 function runDemoScene(): void {
   document.querySelectorAll<HTMLButtonElement>("[data-win]").forEach((button) => {
-    const names: Record<string, string> = { minimize: "minus", maximize: "square", close: "x" };
+    const names: Record<string, string> = { minimize: "window-hide", maximize: "square", close: "x" };
     button.innerHTML = icon(names[button.dataset.win ?? ""], button.dataset.win === "maximize" ? 12 : 15);
   });
   const scene = new URLSearchParams(location.search).get("scene");
@@ -1298,7 +1219,7 @@ function runDemoScene(): void {
     if (scene === "settings") void openSettings();
     if (scene === "add") openAddDrawer();
     if (scene === "login") void login(byName("Hextech"));
-    if (scene === "update") showUpdate({ version: "3.1.0", name: "v3.1.0", url: "", notes: "", publishedAt: "" }, true);
+    if (scene === "update") showUpdateBanner({ version: "3.1.0", name: "v3.1.0", url: "", notes: "", publishedAt: "" }, true);
     if (scene === "menu") {
       const card = document.querySelector<HTMLElement>("#accounts > .card:nth-child(2)")!;
       const rect = card.getBoundingClientRect();
@@ -1308,12 +1229,20 @@ function runDemoScene(): void {
 }
 
 async function start(): Promise<void> {
-  if (!IN_TAURI && import.meta.env.DEV) (await import("./mock")).installMock();
+  if (!IN_TAURI && import.meta.env.DEV) {
+    (await import("./mock")).installMock();
+    $("#dev-tools").hidden = false;
+    $("#reset-demo").addEventListener("click", () => {
+      localStorage.removeItem(PREFS_KEY);
+      location.reload();
+    });
+  }
   loadPrefs();
   setLang(lang());
   applyLanguage();
-  installEmblemDefs(document.getElementById("emblem-defs") as unknown as SVGDefsElement);
   hydrateIcons();
+  wireTooltips();
+  wireControlMotion();
   wire();
   const boot = await api.bootstrap();
   state.accounts = boot.accounts;
@@ -1324,14 +1253,14 @@ async function start(): Promise<void> {
   render();
   if (boot.loadError) toast("error", t("toast.loadFailed"), errorText(boot.loadError.code, boot.loadError.detail), 8000);
   if (!boot.loggingAvailable) toast("info", t("toast.noLogging"), t("toast.noLoggingText"));
-  await Promise.all([wireEvents(), IN_TAURI ? wireWindow() : Promise.resolve()]);
+  await Promise.all([wireEvents(), wireUpdates({ busy: uiBusy }), IN_TAURI ? wireWindow() : Promise.resolve()]);
   renderSchedule();
-  setInterval(renderSchedule, 20_000);
+  setInterval(renderSchedule, 1000);
+  // An update found at launch shows the update screen instead of the app.
+  if (!(await launchUpdate(revealApp))) await revealApp();
   if (!IN_TAURI && import.meta.env.DEV) runDemoScene();
-  document.body.classList.add("ready");
 }
 
-start().catch((error) => {
-  document.body.classList.add("ready");
-  toast("error", t("toast.startFailed"), String(error), 10000);
-});
+observeSelects();
+watchTierNames();
+void start().catch(failStartup);

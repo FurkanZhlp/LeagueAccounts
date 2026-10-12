@@ -1,0 +1,6 @@
+# The asset manifest hashes original Riot files byte-for-byte.
+# Preserve their line endings on every platform, including SVG artwork.
+ui/public/league/** -text -whitespace
+
+# Signed update fixtures are verified byte-for-byte.
+tests/fixtures/update/** -text

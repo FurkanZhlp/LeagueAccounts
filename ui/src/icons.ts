@@ -1,68 +1,24 @@
 import {
   ArrowDownUp,
-  Clock,
-  Settings,
-  Check,
   ChevronDown,
-  CircleAlert,
-  Copy,
-  Download,
-  ExternalLink,
-  Eye,
   EyeOff,
   FolderOpen,
-  Info,
-  KeyRound,
   Keyboard,
-  Languages,
   LayoutGrid,
   List,
-  LogIn,
-  Minus,
-  MoreHorizontal,
-  Pencil,
-  Plus,
-  RefreshCw,
-  Search,
   Square,
-  Trash2,
-  Upload,
-  Users,
-  X,
   type IconNode,
 } from "lucide";
 
 const ICONS: Record<string, IconNode> = {
   "arrow-down-up": ArrowDownUp,
-  clock: Clock,
-  settings: Settings,
-  check: Check,
   "chevron-down": ChevronDown,
-  alert: CircleAlert,
-  copy: Copy,
-  download: Download,
-  "external-link": ExternalLink,
-  eye: Eye,
   "eye-off": EyeOff,
   "folder-open": FolderOpen,
-  info: Info,
-  key: KeyRound,
   keyboard: Keyboard,
-  languages: Languages,
   "layout-grid": LayoutGrid,
   list: List,
-  login: LogIn,
-  minus: Minus,
-  more: MoreHorizontal,
-  pencil: Pencil,
-  plus: Plus,
-  "refresh-cw": RefreshCw,
-  search: Search,
   square: Square,
-  trash: Trash2,
-  upload: Upload,
-  users: Users,
-  x: X,
 };
 
 const attrs = (values: Record<string, string | number | undefined>): string =>
@@ -71,8 +27,22 @@ const attrs = (values: Record<string, string | number | undefined>): string =>
     .map(([name, value]) => `${name}="${value}"`)
     .join(" ");
 
-/** Inline SVG markup for a Lucide icon. */
+// Client masks retain their original silhouettes and take the control's state color.
+const CLIENT_ICONS: Record<string, string> = {
+  clock: "clock.svg", settings: "icon_settings.png", check: "check.svg",
+  alert: "warning.svg", copy: "icon_copy.png", download: "icon_export.png",
+  upload: "icon_import.png", "external-link": "external-link-mask.png",
+  eye: "preview.svg", info: "info-icon.svg", key: "lock.svg",
+  login: "icon_next.png", minus: "icon_remove.png", more: "ellipses.svg",
+  pencil: "icon_edit.png", plus: "icon_plus.png", "refresh-cw": "refresh.png",
+  search: "search.png", trash: "icon_delete.png", users: "profile.svg",
+  x: "control-close.png", "window-hide": "control-hide.png",
+};
+
+/** League's own icon artwork, with OS/utility fallbacks where no client equivalent exists. */
 export function icon(name: string, size = 16): string {
+  const asset = CLIENT_ICONS[name];
+  if (asset) return `<span class="icon native-icon" style="width:var(--icon-size,${size}px);height:var(--icon-size,${size}px);--icon:url('/league/icons/${asset}')" aria-hidden="true"></span>`;
   const node = ICONS[name];
   if (!node) return "";
   const children = node

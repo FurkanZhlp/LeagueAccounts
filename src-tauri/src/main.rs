@@ -7,6 +7,7 @@
 
 mod login_control;
 mod refresh;
+mod updater;
 mod views;
 
 use leagueaccounts::account_manager::KEYRING_SERVICE;
@@ -18,11 +19,11 @@ use leagueaccounts::rank_fetcher::{RankFetcher, RankProvider};
 use leagueaccounts::riot_client::{self, Game, LoginError, LoginOutcome, LoginStep};
 use leagueaccounts::utils::{app_data_dir, parse_account_line, region_from_display, settings_file, REGION_MAP};
 use leagueaccounts::AccountManager;
-use leagueaccounts::updates::{self, Release};
+use leagueaccounts::updates;
 use login_control::LoginControl;
 use refresh::{
-    schedule, spawn_scheduler, spawn_update_checker, start_refresh, LoginMethod, RefreshKind, Schedule, Settings, Shared,
-    MAX_INTERVAL_MINUTES, MIN_INTERVAL_MINUTES,
+    schedule, spawn_scheduler, start_refresh, LoginMethod, RefreshKind, Schedule, Settings, Shared, MAX_INTERVAL_MINUTES,
+    MIN_INTERVAL_MINUTES,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -31,6 +32,7 @@ use std::thread;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
+use updater::{UpdateStatus, Updater};
 use views::{account_view, fail, fail_with, AccountView, AppError, CommandResult, Key};
 
 /// Copied passwords are wiped from the clipboard after this delay.
@@ -49,7 +51,7 @@ struct SettingsView {
     launch_at_startup: bool,
     login_method: LoginMethod,
     launch_game: bool,
-    check_updates: bool,
+    auto_update: bool,
     riot_client_found: bool,
     tft_installed: bool,
 }
@@ -63,7 +65,7 @@ struct SettingsInput {
     launch_at_startup: bool,
     login_method: LoginMethod,
     launch_game: bool,
-    check_updates: bool,
+    auto_update: bool,
 }
 
 #[derive(Serialize)]
@@ -145,7 +147,7 @@ fn settings_view(app: &AppHandle, state: &Shared) -> SettingsView {
         launch_at_startup: app.autolaunch().is_enabled().unwrap_or(false),
         login_method: settings.login_method,
         launch_game: settings.launch_game,
-        check_updates: settings.check_updates,
+        auto_update: settings.auto_update,
         riot_client_found: riot_client::client_path().is_some(),
         tft_installed: riot_client::game_installed(Game::Tft),
     }
@@ -319,7 +321,7 @@ fn update_settings(app: AppHandle, state: AppState<'_>, input: SettingsInput) ->
         settings.start_minimized = input.start_minimized;
         settings.login_method = input.login_method;
         settings.launch_game = input.launch_game;
-        settings.check_updates = input.check_updates;
+        settings.auto_update = input.auto_update;
         settings.save(state.settings_path.as_ref());
     }
     let autolaunch = app.autolaunch();
@@ -557,25 +559,32 @@ fn open_profile(state: AppState<'_>, key: Key, tft: bool) -> CommandResult<()> {
         .map_err(|_| fail("browser"))
 }
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct UpdateStatus {
-    current: &'static str,
-    latest: Option<Release>,
-    newer: bool,
+/// The update state now; `update-status` events carry every later change.
+#[tauri::command]
+fn update_status(state: AppState<'_>) -> UpdateStatus {
+    state.updater.status()
+}
+
+/// Settings › Check now: installs a newer release when automatic updates are on.
+#[tauri::command]
+async fn check_update(app: AppHandle, state: AppState<'_>) -> CommandResult<UpdateStatus> {
+    let shared = Arc::clone(&state);
+    tauri::async_runtime::spawn_blocking(move || updater::check_now(app, shared))
+        .await
+        .map_err(|_| fail("update_failed"))?
 }
 
 #[tauri::command]
-async fn check_update() -> CommandResult<UpdateStatus> {
-    let latest = tauri::async_runtime::spawn_blocking(updates::latest_release)
+async fn update_idle(state: AppState<'_>) -> CommandResult<bool> {
+    let shared = Arc::clone(&state);
+    tauri::async_runtime::spawn_blocking(move || updater::idle(&shared))
         .await
-        .map_err(|_| fail("update_failed"))?
-        .map_err(|error| fail_with("update_failed", error))?;
-    let current = env!("CARGO_PKG_VERSION");
-    let newer = latest
-        .as_ref()
-        .is_some_and(|release| updates::is_newer(&release.version, current));
-    Ok(UpdateStatus { current, latest, newer })
+        .map_err(|_| fail("update_failed"))
+}
+
+#[tauri::command]
+fn restart_to_update(app: AppHandle, state: AppState<'_>) -> CommandResult<()> {
+    updater::restart(&app, &state)
 }
 
 /// Open a release page of this app's repository in the default browser.
@@ -613,6 +622,7 @@ fn main() {
     logging::install_panic_hook();
     // A logging failure must not prevent users from opening their accounts.
     let _ = logging::init();
+    updater::finish_previous_update();
 
     let provider: Arc<dyn RankProvider> = Arc::new(RankFetcher::new());
     let mut manager = match AccountManager::new(provider) {
@@ -627,8 +637,15 @@ fn main() {
         .err()
         .map(|error| fail_with("load_failed", error));
     let settings_path = settings_file().ok();
-    let settings = Settings::load(settings_path.as_ref());
-    let start_minimized = settings.start_minimized && std::env::args().any(|arg| arg == AUTOSTART_FLAG);
+    let mut settings = Settings::load(settings_path.as_ref());
+    // Remember a mislabeled release across launches, not just this restart.
+    if let Some(release) = updater::mislabeled_release() {
+        settings.mislabeled_release = Some(release);
+        settings.save(settings_path.as_ref());
+    }
+    let updater = Updater::new(&settings);
+    let start_minimized = (settings.start_minimized && std::env::args().any(|arg| arg == AUTOSTART_FLAG))
+        || updater::start_minimized_after_restart();
 
     let shared = Arc::new(Shared {
         manager: Mutex::new(manager),
@@ -637,6 +654,7 @@ fn main() {
         refresh_running: Mutex::new(false),
         clipboard_generation: AtomicU64::new(0),
         login: Arc::new(LoginControl::default()),
+        updater,
         load_error,
     });
 
@@ -646,6 +664,7 @@ fn main() {
             Some(vec![AUTOSTART_FLAG]),
         ))
         .plugin(login_control::plugin(Arc::clone(&shared.login)))
+        .plugin(updater::plugin(Arc::clone(&shared)))
         .manage(Arc::clone(&shared))
         .invoke_handler(tauri::generate_handler![
             bootstrap,
@@ -665,7 +684,10 @@ fn main() {
             export_data,
             import_data,
             open_profile,
+            update_status,
             check_update,
+            update_idle,
+            restart_to_update,
             open_release,
             open_logs_folder,
         ])
@@ -679,7 +701,7 @@ fn main() {
                 }
             }
             spawn_scheduler(app.handle().clone(), Arc::clone(&shared));
-            spawn_update_checker(app.handle().clone(), Arc::clone(&shared));
+            updater::spawn(app.handle().clone(), Arc::clone(&shared));
             Ok(())
         })
         .run(tauri::generate_context!());

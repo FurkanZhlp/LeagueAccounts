@@ -1,18 +1,18 @@
-// Capture README screenshots and GIFs from the dev server's demo data.
+// Capture README screenshots and GIFs from the real UI with synthetic data.
 //
-// Usage: `npm run dev` in another terminal, then `node scripts/screenshots.mjs`.
+// Usage: `npm run screenshots`, or `npm run screenshots -- login` for one scene.
+// Starts an isolated dev server automatically.
 // Requires Chrome and ffmpeg on PATH (GIFs are converted from screencasts).
 import { execFileSync } from "node:child_process";
-import { mkdirSync, rmSync } from "node:fs";
-import puppeteer from "puppeteer-core";
+import { mkdirSync, renameSync, rmSync } from "node:fs";
+import { resolve } from "node:path";
+import { demoBrowser, demoPage } from "./demo-browser.mjs";
 
-const CHROME = process.env.CHROME_PATH ?? "C:/Program Files/Google/Chrome/Application/chrome.exe";
-const BASE = process.env.BASE_URL ?? "http://localhost:1420/";
-const OUT = "docs/screenshots";
+const OUT = resolve("docs/screenshots");
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Static screens: scene -> wait for animations to settle.
-const STILLS = { main: 2600, list: 2600, settings: 1500, add: 1500, menu: 1500 };
+const STILLS = { main: 1000, tft: 1000, list: 1000, settings: 1000, add: 1000, menu: 1000, login: 2200 };
 
 // Animated screens: scene -> scripted interaction while recording.
 const CLIPS = {
@@ -34,6 +34,11 @@ const CLIPS = {
   },
 };
 
+const requested = new Set(process.argv.slice(2));
+for (const scene of requested) {
+  if (!(scene in STILLS) && !(scene in CLIPS)) throw new Error(`Unknown capture scene: ${scene}`);
+}
+
 function toGif(input, output) {
   const filter =
     "fps=12,scale=960:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=160:stats_mode=diff[p];[b][p]paletteuse=dither=sierra2_4a:diff_mode=rectangle";
@@ -42,37 +47,40 @@ function toGif(input, output) {
 
 mkdirSync(OUT, { recursive: true });
 mkdirSync(`${OUT}/.tmp`, { recursive: true });
-const browser = await puppeteer.launch({ executablePath: CHROME, args: ["--lang=en-US"] });
-
-async function open(scene) {
-  const page = await browser.newPage();
-  await page.setViewport({ width: 1360, height: 860, deviceScaleFactor: 1 });
-  await page.evaluateOnNewDocument(() => localStorage.setItem("leagueaccounts.lang", "en"));
-  await page.goto(`${BASE}?scene=${scene}`, { waitUntil: "domcontentloaded" });
-  return page;
-}
+const demo = await demoBrowser();
+const { browser, base } = demo;
 
 try {
   for (const [scene, wait] of Object.entries(STILLS)) {
-    const page = await open(scene);
+    if (requested.size && !requested.has(scene)) continue;
+    const page = await demoPage(browser, base, scene);
     await sleep(wait);
-    await page.screenshot({ path: `${OUT}/${scene}.png` });
+    await page.screenshot({ path: `${OUT}/.tmp/${scene}.png` });
+    renameSync(`${OUT}/.tmp/${scene}.png`, `${OUT}/${scene}.png`);
     await page.close();
     console.log(`still ${scene}`);
   }
   for (const [scene, act] of Object.entries(CLIPS)) {
-    const page = await browser.newPage();
-    await page.setViewport({ width: 1360, height: 860, deviceScaleFactor: 1 });
-    await page.evaluateOnNewDocument(() => localStorage.setItem("leagueaccounts.lang", "en"));
+    if (requested.size && !requested.has(scene)) continue;
+    const page = await demoPage(browser, base);
     const recorder = await page.screencast({ path: `${OUT}/.tmp/${scene}.webm` });
-    await page.goto(`${BASE}?scene=${scene === "overview" ? "main" : scene}`, { waitUntil: "domcontentloaded" });
-    await act(page);
-    await recorder.stop();
+    try {
+      if (scene === "login") await page.click('#accounts > .card:nth-child(3) .btn-play');
+      await act(page);
+    } finally {
+      await recorder.stop();
+    }
+    // Let in-flight CDP frame acknowledgements settle before closing the target.
+    await sleep(250);
     await page.close();
-    toGif(`${OUT}/.tmp/${scene}.webm`, `${OUT}/${scene}.gif`);
+    toGif(`${OUT}/.tmp/${scene}.webm`, `${OUT}/.tmp/${scene}.gif`);
+    renameSync(`${OUT}/.tmp/${scene}.gif`, `${OUT}/${scene}.gif`);
     console.log(`gif ${scene}`);
   }
 } finally {
-  await browser.close();
-  rmSync(`${OUT}/.tmp`, { recursive: true, force: true });
+  await demo.close();
+  // This is the fixed, resolved scratch directory created above.
+  const scratch = resolve(OUT, ".tmp");
+  if (!scratch.startsWith(`${OUT}\\`) && !scratch.startsWith(`${OUT}/`)) throw new Error("Invalid capture scratch path");
+  rmSync(scratch, { recursive: true, force: true });
 }

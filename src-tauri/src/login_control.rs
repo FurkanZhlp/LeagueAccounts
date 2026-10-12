@@ -43,6 +43,21 @@ impl LoginControl {
         self.cancel.store(true, Ordering::SeqCst);
     }
 
+    pub fn is_running(&self) -> bool {
+        self.state.lock().unwrap_or_else(|error| error.into_inner()).running
+    }
+
+    /// Close admission for an update restart, unless a login is running:
+    /// a restart never cancels a sign-in.
+    pub fn close_if_idle(&self) -> bool {
+        let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+        if state.running {
+            return false;
+        }
+        state.exiting = true;
+        true
+    }
+
     fn request_exit(&self) -> ExitAction {
         let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
         let first_request = !state.exiting;
@@ -149,6 +164,20 @@ mod tests {
         drop(guard);
         assert_eq!(control.request_exit(), ExitAction::Ready);
         assert!(control.try_start().is_none());
+    }
+
+    #[test]
+    fn update_restart_waits_for_a_running_login_and_then_blocks_new_ones() {
+        let control = Arc::new(LoginControl::default());
+        let guard = control.try_start().unwrap();
+        assert!(control.is_running());
+        assert!(!control.close_if_idle());
+        assert!(!control.cancel.load(Ordering::SeqCst));
+        drop(guard);
+        assert!(control.close_if_idle());
+        assert!(control.try_start().is_none());
+        // The exit that follows proceeds at once.
+        assert_eq!(control.request_exit(), ExitAction::Ready);
     }
 
     #[test]

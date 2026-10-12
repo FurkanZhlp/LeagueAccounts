@@ -130,50 +130,12 @@ export function canPlayWith(rank: RankLike, friendTier: string, friendDivision: 
   }
 }
 
-/** Shared gradient definitions, referenced by every emblem via url(#…). */
-export function installEmblemDefs(defs: SVGDefsElement): void {
-  defs.innerHTML = Object.entries(TIERS)
-    .map(
-      ([tier, colors]) => `
-      <linearGradient id="em-frame-${tier}" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="${colors.light}"/>
-        <stop offset="0.55" stop-color="${colors.base}"/>
-        <stop offset="1" stop-color="${colors.dark}"/>
-      </linearGradient>
-      <linearGradient id="em-gem-${tier}" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0" stop-color="${colors.light}"/>
-        <stop offset="0.5" stop-color="${colors.base}"/>
-        <stop offset="1" stop-color="${tier === "Challenger" ? "#5fd3ff" : colors.dark}"/>
-      </linearGradient>
-      <radialGradient id="em-core-${tier}" cx="0.5" cy="0.42" r="0.6">
-        <stop offset="0" stop-color="${colors.base}" stop-opacity="0.35"/>
-        <stop offset="1" stop-color="#05070c" stop-opacity="0.95"/>
-      </radialGradient>`,
-    )
-    .join("");
-}
-
-/** A crest emblem: hex frame, faceted gem, crown spikes for apex tiers. */
-export function emblem(tierName: string, size = 56): string {
+/** Riot's ranked art: small crests stay crisp in filters; cards use the full emblem in both
+    games, as the client does for RANKED_TFT. */
+export function emblem(tierName: string, size = 56, mode: Mode = "lol"): string {
   const tier = normalizeTier(tierName);
-  const ranked = tier !== "Unranked" && tier !== "Error";
-  const apex = APEX.has(tier);
-  const crown = apex
-    ? `<path d="M22 13 L26 4 L30 11 L32 2 L34 11 L38 4 L42 13 Z" fill="url(#em-frame-${tier})" stroke="${TIERS[tier].dark}" stroke-width="0.8"/>`
-    : "";
-  const wings =
-    tier === "Grandmaster" || tier === "Challenger"
-      ? `<path d="M10 30 L2 24 L6 36 L1 42 L12 40 Z M54 30 L62 24 L58 36 L63 42 L52 40 Z" fill="url(#em-frame-${tier})" opacity="0.9"/>`
-      : "";
-  const gem = ranked
-    ? `<path d="M32 21 L42 33 L32 47 L22 33 Z" fill="url(#em-gem-${tier})"/>
-       <path d="M32 21 L42 33 L32 33 Z" fill="#fff" opacity="0.28"/>
-       <path d="M22 33 L32 47 L32 33 Z" fill="#000" opacity="0.18"/>`
-    : `<text x="32" y="39" text-anchor="middle" font-size="15" font-weight="700" fill="${TIERS[tier].light}" opacity="0.8">${tier === "Error" ? "!" : "?"}</text>`;
-  return `<svg class="emblem${apex ? " emblem-apex" : ""}" viewBox="0 0 64 64" width="${size}" height="${size}" aria-hidden="true">
-    ${wings}${crown}
-    <path d="M32 8 L53 20 L53 44 L32 56 L11 44 L11 20 Z" fill="url(#em-frame-${tier})"/>
-    <path d="M32 12.5 L49 22.3 L49 41.7 L32 51.5 L15 41.7 L15 22.3 Z" fill="url(#em-core-${tier})"/>
-    ${gem}
-  </svg>`;
+  const asset = (tier === "Error" ? "Unranked" : tier).toLowerCase();
+  const mini = size <= 32;
+  const src = mini ? `/league/crests/${asset}${mode === "tft" ? "-tft" : ""}.svg` : `/league/ranks/${asset}.png`;
+  return `<span class="emblem ${mini ? "emblem-mini" : "emblem-full"}${!mini && asset === "unranked" ? " emblem-unranked" : ""}" style="--emblem-size:${size}px" aria-hidden="true"><img src="${src}" alt="" draggable="false" /></span>`;
 }

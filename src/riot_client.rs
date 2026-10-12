@@ -515,6 +515,11 @@ fn running_processes() -> Vec<Process> {
         .collect()
 }
 
+/// Whether a match is being played, so an update restart can wait for it.
+pub fn in_game() -> bool {
+    running_processes().iter().any(|process| process.name == GAME_PROCESS)
+}
+
 fn game_username(processes: &[Process]) -> Option<String> {
     let mut username: Option<String> = None;
     for process in processes

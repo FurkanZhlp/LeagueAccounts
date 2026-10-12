@@ -4,29 +4,30 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>League Accounts</title>
+    <!-- Startup screen styles; must precede the app module. See startup.css. -->
+    <link rel="stylesheet" href="/startup.css" />
   </head>
-  <body>
-    <div class="backdrop" aria-hidden="true">
-      <div class="orb orb-a"></div>
-      <div class="orb orb-b"></div>
-      <div class="orb orb-c"></div>
-      <div class="grain"></div>
+  <body aria-busy="true">
+    <div id="startup-loader" role="status" aria-label="Loading League Accounts">
+      <div id="startup-animation" aria-hidden="true"></div>
+      <div id="startup-error" hidden>
+        <p>League Accounts couldn't finish loading.</p>
+        <button id="startup-retry" type="button">Try again</button>
+      </div>
     </div>
+    <div class="backdrop" aria-hidden="true"></div>
 
     <header class="titlebar" data-tauri-drag-region>
       <div class="brand" data-tauri-drag-region>
-        <img src="/icon.png" alt="" class="brand-icon" />
+        <img src="/icon.png" alt="" class="brand-icon" width="28" height="28" />
         <span class="brand-name" data-tauri-drag-region>League Accounts</span>
       </div>
       <div class="mode-switch" role="tablist">
         <span class="mode-pill" aria-hidden="true"></span>
-        <button role="tab" data-mode="lol" class="mode-btn" data-i18n="mode.lol"></button>
-        <button role="tab" data-mode="tft" class="mode-btn" data-i18n="mode.tft"></button>
+        <button role="tab" data-mode="lol" class="mode-btn"><img src="/league/icons/lol.png" alt="" width="23" height="23" /><span data-i18n="mode.lol"></span></button>
+        <button role="tab" data-mode="tft" class="mode-btn"><img src="/league/icons/tft.svg" alt="" width="23" height="23" /><span data-i18n="mode.tft"></span></button>
       </div>
       <div class="window-controls">
-        <button class="lang-btn" id="lang" data-i18n-title="lang.label" data-i18n-aria="lang.label">
-          <span data-icon="languages"></span>
-        </button>
         <button class="win-btn" data-win="minimize" data-i18n-title="win.minimize" data-i18n-aria="win.minimize"></button>
         <button class="win-btn" data-win="maximize" data-i18n-title="win.maximize" data-i18n-aria="win.maximize"></button>
         <button class="win-btn win-close" data-win="close" data-i18n-title="win.close" data-i18n-aria="win.close"></button>
@@ -45,14 +46,6 @@
           <div id="distribution" class="distribution"></div>
         </section>
 
-        <button class="schedule" id="schedule" data-i18n-title="refresh.idle" data-i18n-aria="refresh.idle">
-          <span class="schedule-ring"><span data-icon="refresh-cw"></span></span>
-          <span class="schedule-body">
-            <span class="schedule-label" data-i18n="schedule.label"></span>
-            <span class="schedule-text"></span>
-          </span>
-        </button>
-
         <section class="side-section side-bottom">
           <button class="side-link" data-action="import"><span data-icon="download"></span> <span data-i18n="side.import"></span></button>
           <button class="side-link" data-action="export"><span data-icon="upload"></span> <span data-i18n="side.export"></span></button>
@@ -64,11 +57,32 @@
       </aside>
 
       <main class="main" data-i18n-aria="page.title">
+        <header class="collection-header">
+          <div>
+            <p class="collection-eyebrow" id="queue-label"></p>
+            <h1 data-i18n="page.title"></h1>
+          </div>
+          <div class="collection-summary">
+            <div id="dev-tools" class="dev-tools" hidden>
+              <span class="dev-badge" data-tooltip="Synthetic accounts. Actions are simulated; changes reset on reload.">DEV DATA</span>
+              <button id="reset-demo" class="text-button">Reset demo</button>
+            </div>
+            <!-- The client's ranked "Next ladder update" countdown; clicking refreshes now. -->
+            <button class="ladder-update" id="schedule" data-i18n-title="refresh.idle" data-i18n-aria="refresh.idle">
+              <span class="ladder-update-label"></span><span class="ladder-update-time"></span>
+              <span class="ladder-update-icon" data-icon="refresh-cw"></span>
+            </button>
+            <!-- One line, with the button's space always reserved, so filtering never moves the layout. -->
+            <div class="summary-count">
+              <button id="clear-filters" class="text-button" data-i18n="empty.clear" hidden></button>
+              <span id="account-count" role="status"></span>
+            </div>
+          </div>
+        </header>
         <div class="toolbar">
           <label class="search">
             <span data-icon="search"></span>
             <input id="search" type="text" data-i18n-ph="toolbar.search" autocomplete="off" spellcheck="false" />
-            <kbd>Ctrl F</kbd>
           </label>
           <div class="select-wrap">
             <select id="region-filter" data-i18n-aria="sort.region"></select>
@@ -103,10 +117,6 @@
     <div id="menu-root"></div>
     <div id="toasts" class="toasts" aria-live="polite"></div>
 
-    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
-      <defs id="emblem-defs"></defs>
-    </svg>
-
-    <script type="module" src="/src/main.ts"></script>
+    <script type="module" src="/src/entry.ts"></script>
   </body>
 </html>

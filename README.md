@@ -22,7 +22,8 @@ One-click login, current ranks and auto refresh — with passwords kept in Windo
 - **Auto refresh.** Ranks update in the background on your schedule, every 30 minutes by default.
 - **Duo finder.** The *Friend elo* filter shows which of your accounts can play ranked with a friend of a given rank.
 - **Safe by design.** Passwords live in Windows Credential Manager and never reach the interface. A copied password is wiped from the clipboard after 30 seconds.
-- **Made for daily use.** Launch with Windows, start minimized, keyboard shortcuts, import/export, update notifications, and 5 languages (English, Türkçe, Deutsch, Español, Français).
+- **League-native presentation.** Client rank crests, typography and Hextech frames, with brief, silent effects on interaction. Respects Windows' reduced-motion preference.
+- **Made for daily use.** Launch with Windows, start minimized, keyboard shortcuts, import/export, automatic updates, and 6 languages (English, Türkçe, Deutsch, Español, Français, Português).
 
 ## Screenshots
 
@@ -43,12 +44,21 @@ One-click login, current ranks and auto refresh — with passwords kept in Windo
 ## Installation
 
 1. Download **`LeagueAccounts.exe`** from the [latest release](https://github.com/Tariolle/LeagueAccounts/releases/latest).
-2. Put it anywhere you like (for example `Documents\LeagueAccounts`) and run it. Nothing else needs to be installed.
+2. Put it in a folder of your own, for example `Documents\LeagueAccounts` (not `Program Files`, so that it can update itself), and run it. Nothing else needs to be installed.
 3. On first launch Windows SmartScreen may say *"Windows protected your PC"*, because the app is not code-signed. Click **More info → Run anyway**.
 
 **Requirements:** Windows 10 or 11 with Microsoft Edge WebView2. WebView2 ships with Windows 11 and current Windows 10. If the window stays blank, install the [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/).
 
-League Accounts checks GitHub for new releases and shows a banner when one is available. You can turn this off in **Settings → Updates**.
+### Updates
+
+League Accounts updates itself. It checks GitHub for a new release when it starts and every 6 hours, downloads it in the background and verifies its signature before replacing `LeagueAccounts.exe`:
+
+- **Found when you open the app:** an update screen shows the download, then the new version starts.
+- **Found while the app is open:** once no login, rank refresh, dialog or match is in progress, a notice offers **Restart now** or **Later**, and restarts by itself after 10 seconds. With **Later**, the new version starts the next time you open the app.
+
+If the folder can't be written to, the download fails or the signature doesn't match, you keep your version and get an **Update available** banner with a download link instead. Turning off **Settings → Updates → Update automatically** stops all update checks; **Check now** still looks for a new version and offers it as a download. During an update, `LeagueAccounts.exe.download` and `LeagueAccounts.old.exe` appear briefly next to the app.
+
+Versions 3.0.3 and earlier only show the banner: download the first version with automatic updates yourself.
 
 ## Getting started
 
@@ -105,19 +115,19 @@ The switch at the top changes every rank, sort order and filter between **League
 ### Rank updates
 
 - Cards show the latest rank and LP to help you choose an account. Refreshing replaces that rank data; the app does not collect LP progression.
-- The **Auto refresh** button in the sidebar shows when the next refresh happens. Click it to refresh immediately. Change the interval (5 minutes to 24 hours) in **Settings → Rank updates**.
+- The **Next rank update** countdown at the top right shows when the next refresh happens. Click it to refresh immediately. Change the interval (5 minutes to 24 hours) in **Settings → Rank updates**.
 - Rank data comes from public OP.GG profile pages, two requests per account (LoL and TFT). Very short intervals with many accounts may get rate-limited.
 
 ## Settings
 
 | Setting | Description |
 |---|---|
-| Language | English, Türkçe, Deutsch, Español, Français (follows your system language by default) |
+| Language | English, Türkçe, Deutsch, Español, Français, Português (follows your system language by default) |
 | Launch when Windows starts | Opens League Accounts when you sign in to Windows; optionally **start minimized** |
 | Refresh ranks automatically | On/off and interval in minutes (default 30) |
 | Login method | *Open the Riot Client and sign in* (default) or *Type into the previous window* |
 | Launch the game after signing in | Starts LoL/TFT once sign-in is confirmed |
-| Check for updates automatically | Notifies you about new GitHub releases |
+| Update automatically | Installs new releases and restarts when you're not using the app; when off, the app checks only when you click **Check now** |
 
 ## Keyboard shortcuts
 
@@ -140,7 +150,7 @@ The switch at the top changes every rank, sort order and filter between **League
 - **Passwords** are stored in **Windows Credential Manager** (service `LeagueAccounts`). They are never written to the app's data files and never sent to the interface. Copying and login happen in the native backend.
 - **Clipboard:** copied and auto-typed credentials are excluded from Windows clipboard history and cloud sync. Copied passwords are cleared after 30 seconds, and the clipboard is cleared after every automatic login.
 - **Exports** (`Export`) contain passwords in **plain text**. The app warns you before exporting; keep such files private.
-- **Network:** the app only contacts OP.GG (public profile pages, for ranks), the Riot Client's local API on `127.0.0.1` (sign-in state), and the GitHub API (update check). There is no telemetry and no account server.
+- **Network:** the app only contacts OP.GG (public profile pages, for ranks), the Riot Client's local API on `127.0.0.1` (sign-in state), and GitHub (update checks, unless turned off, and release downloads). There is no telemetry and no account server.
 - **Local data** is stored in `%APPDATA%\LeagueAccounts\`:
 
   | File | Contents |
@@ -168,17 +178,43 @@ npx tauri dev              # run with hot reload
 npx tauri build --no-bundle  # build target/release/LeagueAccounts.exe
 ```
 
-`npm run dev` opens the interface in a browser with demo data (no backend). `npm run screenshots` regenerates the images in `docs/screenshots` from that demo data (requires Chrome and ffmpeg).
+`npm run dev` serves the browser development preview at **http://localhost:1420**. It includes **11 synthetic accounts: one per rank from Iron through Challenger, plus Unranked, in both LoL and TFT**. A **DEV DATA** badge identifies the preview. Login, refresh, account edits and settings are simulated in memory; no real accounts, credentials, files, or Riot Client connections are used. **Reset demo** restores the sample accounts and default view, and reloading discards edits. Development UI preferences use separate storage keys. Preview mode does not change desktop account storage or login behavior.
+
+`npm run screenshots` starts an isolated demo server and regenerates the README's PNGs and GIFs from the current interface and scripted interactions. These are real captures with synthetic accounts, not separately designed mockups. Run it after UI changes; it does not regenerate on every launch. Requires Chrome and ffmpeg; set `CHROME_PATH` for another Chromium installation or `BASE_URL` to use an existing demo server.
+
+Startup shows a dark screen with the client's own hextech loading animation (silent) until the interface, fonts, crests and background art are ready. It respects reduced motion and offers a retry action if the app fails to load.
+
+`npm run test:ui` checks cold startup with delayed scripts, fonts and images, startup failure/retry, the development rank set and reset, filters, LoL/TFT crests, keyboard navigation, framed dropdowns, Settings controls and scrolling, accessible tooltips, adding accounts, login progress, long tier names on the narrowest cards, a still layout while filtering, silent refreshes, silent/reduced motion, and the update screen, restart notice and download banner in Chrome. `npm test` runs the renderer authentication regressions.
+
+In the preview, `?scene=updating` simulates an update found at launch and `?scene=restart` one installed in the background.
+
+Client assets are bundled locally and pinned to patch 16.20. Builds verify their hashes with `npm run assets:verify`; `node scripts/league-assets.mjs --fetch` restores missing assets. See [asset provenance and rights](THIRD_PARTY_ASSETS.md). No client modification or Pengu installation is required to run League Accounts.
 
 | Folder | Contents |
 |---|---|
 | `src/` | Rust core: storage, Credential Manager, OP.GG parsing, Riot Client integration, auto-type |
-| `src-tauri/` | Tauri shell: commands, auto refresh scheduler, settings, update checker |
+| `src-tauri/` | Tauri shell: commands, auto refresh scheduler, settings, automatic updates |
 | `ui/` | Web interface (TypeScript + CSS); translations live in `ui/src/i18n.ts` |
+
+### Releasing
+
+1. Set the new version in `package.json`, `src-tauri/tauri.conf.json`, `Cargo.toml` and `src-tauri/Cargo.toml`, run `npm install` and `cargo check` to update the lock files, and merge.
+2. Push a matching tag, for example `git tag v3.1.0 && git push origin v3.1.0`.
+3. The **Release** workflow builds and signs `LeagueAccounts.exe` and creates a draft release with it and `LeagueAccounts.exe.sig`. Write the notes and publish it; apps update only from published releases.
+
+The signature is what lets the app replace itself, so releases need the update signing key, set up once:
+
+```bat
+npx tauri signer generate -w "%USERPROFILE%\.tauri\leagueaccounts.key"
+gh secret set TAURI_SIGNING_PRIVATE_KEY < "%USERPROFILE%\.tauri\leagueaccounts.key"
+gh secret set TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+```
+
+Commit the public half, `leagueaccounts.key.pub`, at the repository root; it is built into the app. Keep the private key and its password backed up: without them, users have to download the next release manually. See [the design note](docs/automatic-updates.md) for details.
 
 ## License and disclaimer
 
-League Accounts is released under the [MIT License](LICENSE).
+League Accounts' code is released under the [MIT License](LICENSE). Bundled Riot Games artwork, fonts and animations retain their original rights and are excluded from that license; see [THIRD_PARTY_ASSETS.md](THIRD_PARTY_ASSETS.md).
 
 League Accounts isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games, League of Legends and Teamfight Tactics are trademarks or registered trademarks of Riot Games, Inc. Rank data is provided by OP.GG; this project is not affiliated with OP.GG.
 

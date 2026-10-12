@@ -60,13 +60,15 @@ export function openLoginOverlay(options: {
   const overlay = fragment(`
     <div class="login-overlay" role="dialog" aria-modal="true" aria-live="polite" tabindex="-1">
       <div class="login-stage">
+        <div class="login-identity">
         <div class="login-orbit">
-          <span class="ring ring-1"></span><span class="ring ring-2"></span><span class="ring ring-3"></span>
-          <div class="login-emblem">${emblem(options.tier, 104)}</div>
+          <div class="login-emblem">${emblem(options.tier, 240, document.documentElement.dataset.mode === "tft" ? "tft" : "lol")}</div>
         </div>
         <h2 class="login-title">${esc(t("login.title"))}</h2>
         <p class="login-account">${esc(accountLabel(options.account))}</p>
-        <div class="login-progress"><span></span></div>
+        </div>
+        <div class="login-details">
+        <div class="login-progress" role="progressbar" aria-label="${esc(t("login.title"))}" aria-valuemin="0" aria-valuemax="${steps.length}" aria-valuenow="0"><span></span></div>
         <ol class="login-steps">
           ${steps
             .map(
@@ -81,9 +83,11 @@ export function openLoginOverlay(options: {
           <button class="btn btn-ghost" data-login="cancel">${esc(t("common.cancel"))}</button>
           <button class="btn btn-primary" data-login="close" hidden>${esc(t("common.close"))}</button>
         </div>
+        </div>
       </div>
     </div>`);
   $("#modal-root").append(overlay);
+  const progress = $(".login-progress", overlay);
 
   const render = () => {
     let done = 0;
@@ -104,12 +108,16 @@ export function openLoginOverlay(options: {
     steps.forEach((step) => {
       if (states.get(step) === "done" || states.get(step) === "skipped") done++;
     });
-    $(".login-progress span", overlay).style.width = `${(done / steps.length) * 100}%`;
+    progress.style.setProperty("--login-progress", String(done / steps.length));
+    progress.setAttribute("aria-valuenow", String(done));
+    const current = steps.find(step => states.get(step) === "active");
+    progress.setAttribute("aria-valuetext", current ? label(current) : t(done === steps.length ? "login.step.done" : "login.title"));
   };
 
   // The result stays on screen until the user closes it.
   const finish = (kind: "success" | "info" | "error", message: string) => {
     overlay.classList.add(`is-${kind}`);
+    progress.setAttribute("aria-valuetext", $(".login-title", overlay).textContent ?? "");
     const text = $(".login-message", overlay);
     text.textContent = message;
     text.hidden = !message;
@@ -125,6 +133,7 @@ export function openLoginOverlay(options: {
       message.hidden = step !== "verification";
       if (step === "verification") {
         message.textContent = t("login.step.verification");
+        progress.setAttribute("aria-valuetext", message.textContent);
         return;
       }
       if (step === "done") {

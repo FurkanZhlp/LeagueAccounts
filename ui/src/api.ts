@@ -30,7 +30,8 @@ export interface Settings {
   launchAtStartup: boolean;
   loginMethod: LoginMethod;
   launchGame: boolean;
-  checkUpdates: boolean;
+  /** Install new releases automatically; when off, only notify. */
+  autoUpdate: boolean;
   riotClientFound: boolean;
   tftInstalled: boolean;
 }
@@ -73,10 +74,28 @@ export interface Release {
   publishedAt: string;
 }
 
+export type UpdatePhase =
+  | "idle"
+  | "checking"
+  | "upToDate"
+  | "available"
+  | "downloading"
+  | "ready"
+  | "restarting"
+  | "failed";
+
+/** "available" and "failed" fall back to the download banner; "ready" is installed. */
 export interface UpdateStatus {
+  phase: UpdatePhase;
   current: string;
-  latest: Release | null;
-  newer: boolean;
+  /** The latest release when known, newer or not. */
+  release: Release | null;
+  received: number;
+  total: number;
+  /** The check the app starts with, which may hold the loading screen. */
+  launch: boolean;
+  /** Increases with every change; an older snapshot is ignored. */
+  seq: number;
 }
 
 export type LoginResult = "signedIn" | "typed" | "alreadySignedIn";
@@ -195,7 +214,11 @@ export const api = {
     call<LoginResult>("login", { key, tft, closeRunning }),
   cancelLogin: () => call<void>("cancel_login"),
   gameStatus: (key: Key) => call<GameStatus>("game_status", { key }),
+  updateStatus: () => call<UpdateStatus>("update_status"),
   checkUpdate: () => call<UpdateStatus>("check_update"),
+  /** No login, rank refresh or match in progress. */
+  updateIdle: () => call<boolean>("update_idle"),
+  restartToUpdate: () => call<void>("restart_to_update"),
   openRelease: (url: string) => call<void>("open_release", { url }),
   getSettings: () => call<Settings>("get_settings"),
   updateSettings: (input: SettingsInput) => call<Settings>("update_settings", { input }),
@@ -208,8 +231,8 @@ export const api = {
 export const events = {
   onLoginStep: (handler: (step: LoginStep) => void): Promise<UnlistenFn> =>
     listen<LoginStep>("login-step", (event) => handler(event.payload)),
-  onUpdateAvailable: (handler: (release: Release) => void): Promise<UnlistenFn> =>
-    listen<Release>("update-available", (event) => handler(event.payload)),
+  onUpdateStatus: (handler: (status: UpdateStatus) => void): Promise<UnlistenFn> =>
+    listen<UpdateStatus>("update-status", (event) => handler(event.payload)),
   onRefreshStarted: (handler: (started: RefreshStarted) => void): Promise<UnlistenFn> =>
     listen<RefreshStarted>("refresh-started", (event) => handler(event.payload)),
   onSchedule: (handler: (schedule: Schedule) => void): Promise<UnlistenFn> =>

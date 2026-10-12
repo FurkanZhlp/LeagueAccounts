@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "test": "node --test tests/riot_renderer.test.mjs",
-    "build": "tsc --noEmit && vite build",
+    "test:ui": "node --test --test-concurrency=1 tests/startup.test.mjs tests/ui.test.mjs tests/update.test.mjs tests/csp.test.mjs",
+    "assets:verify": "node scripts/league-assets.mjs",
+    "build": "npm run assets:verify && tsc --noEmit && vite build",
     "tauri": "tauri",
     "screenshots": "node scripts/screenshots.mjs"
   },
@@ -17,9 +19,8 @@
     "vite": "^8.3.2"
   },
   "dependencies": {
-    "@fontsource-variable/inter": "^5.3.0",
-    "@fontsource/cinzel": "^5.3.0",
     "@tauri-apps/api": "^2.12.1",
+    "lottie-web": "^5.13.0",
     "lucide": "^1.50.0"
   }
 }

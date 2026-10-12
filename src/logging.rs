@@ -47,6 +47,12 @@ pub enum Event {
     LoginFailed,
     LoginCancelled,
     LogFolderOpenFailed,
+    UpdateCheckFailed,
+    UpdateDownloaded,
+    UpdateVerificationFailed,
+    UpdateInstalled,
+    UpdateFailed,
+    UpdateRestarted,
     Panic,
 }
 
@@ -81,6 +87,12 @@ impl Event {
             Self::LoginFailed => "login_failed",
             Self::LoginCancelled => "login_cancelled",
             Self::LogFolderOpenFailed => "log_folder_open_failed",
+            Self::UpdateCheckFailed => "update_check_failed",
+            Self::UpdateDownloaded => "update_downloaded",
+            Self::UpdateVerificationFailed => "update_verification_failed",
+            Self::UpdateInstalled => "update_installed",
+            Self::UpdateFailed => "update_failed",
+            Self::UpdateRestarted => "update_restarted",
             Self::Panic => "panic",
         }
     }
@@ -96,7 +108,10 @@ impl Event {
             | Self::LoginCancelled
             | Self::RankRefreshStarted
             | Self::RankRefreshCompleted
-            | Self::AutoRefreshStarted => "INFO",
+            | Self::AutoRefreshStarted
+            | Self::UpdateDownloaded
+            | Self::UpdateInstalled
+            | Self::UpdateRestarted => "INFO",
             _ => "ERROR",
         }
     }
@@ -160,6 +175,8 @@ pub enum Reason {
     HttpOther,
     ResponseBody,
     ProfileMissing,
+    Signature,
+    VersionMismatch,
     Other,
 }
 
@@ -221,6 +238,8 @@ impl Reason {
             Self::HttpOther => "http_other",
             Self::ResponseBody => "response_body",
             Self::ProfileMissing => "profile_missing",
+            Self::Signature => "signature",
+            Self::VersionMismatch => "version_mismatch",
             Self::Other => "other",
         }
     }
