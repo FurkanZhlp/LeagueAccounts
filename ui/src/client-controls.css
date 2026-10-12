@@ -1,0 +1,109 @@
+/* Controls inspected in the live client: Collection, Profile, TFT and Settings.
+   Native HTML semantics remain intact; artwork is pinned in league/manifest.json. */
+:root {
+  --client-gold-border: linear-gradient(to top, #785b28 0%, #c89c3c 55%, #c8a355 71%, #c8aa6e 100%);
+  --client-gold-hover: linear-gradient(to top, #c89c3c, #dcc188 50%, #e1c998 71%, #f0e6d8);
+}
+.native-icon { display: inline-block; flex-shrink: 0; background: currentColor; mask: var(--icon) center / var(--icon-mask-size, contain) no-repeat; }
+.dev-tools { display: flex; align-items: center; gap: 10px; }
+.dev-tools[hidden] { display: none; }
+.dev-badge { font: 11px Spiegel, sans-serif; letter-spacing: .08em; padding: 3px 6px; border: 1px solid #3b7778; color: #8ed6d1; background: #0c262c; white-space: nowrap; }
+::-webkit-scrollbar { width: 11px; height: 11px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { border: 3px solid transparent; border-radius: 0; background: #785a28; background-clip: padding-box; min-height: 32px; }
+::-webkit-scrollbar-thumb:hover { background-color: #c8aa6e; }
+::-webkit-scrollbar-thumb:active { background-color: #463714; }
+
+/* The flat button's beveled edges and brief text glow, without continuous shine. */
+.btn { border: 2px solid transparent; border-image: var(--client-gold-border) 1; border-radius: 0; min-height: 32px; background: #1e2328; color: #cdbe91; box-shadow: 0 0 0 1px #010a13, inset 0 0 0 1px #010a13; transition: color 160ms, background 160ms; }
+.btn-primary { background: linear-gradient(#5a401f, #332717); }
+.btn:is(:hover, :focus-visible):not(:disabled) { border-image: var(--client-gold-hover) 1; background: linear-gradient(0deg, #766133cc -40%, #1e232a 60%); color: #f0e6d2; box-shadow: 0 0 0 1px #010a13, inset 0 0 0 1px #010a13; filter: none; transform: none; animation: client-text-glow 600ms cubic-bezier(0,0,.33,1); }
+.btn-primary:is(:hover, :focus-visible):not(:disabled) { background: linear-gradient(#604522, #846745); }
+.btn:active:not(:disabled) { border-image: linear-gradient(#463817, #694f27) 1; color: #5c5b57; transform: none; }
+.btn:disabled { border-image: none; border-color: #3c3c41; background: #1e2328; color: #5b5a56; box-shadow: none; }
+.btn-danger { color: #ed9b86; background: #30201d; }
+.btn-danger:is(:hover, :focus-visible):not(:disabled) { color: #ffd6c5; background: #49302a; }
+.btn-play { border-image: linear-gradient(to top, #005a82, #0596aa 50%, #08b1b2) 1; background: #1e2328; color: #a3c7c7; }
+.btn-play:is(:hover, :focus-visible):not(:disabled) { border-image: linear-gradient(to top, #3097c6, #0ecaba 50%, #cdfafa) 1; background: linear-gradient(0deg, #005a8255, #1e2328); color: #cdfafa; }
+.btn-play::after { display: none; }
+.btn.is-client-click:not(:disabled) { animation: client-click 130ms linear, client-text-glow 400ms linear; }
+.btn.is-client-click::before { content: ''; position: absolute; inset: 0; pointer-events: none; background: url('/league/controls/sheen.png') left -25px top -25px / 48px 48px no-repeat, url('/league/controls/sheen.png') right -25px bottom -25px / 48px 48px no-repeat; animation: client-flare 400ms cubic-bezier(0,0,.33,1) both; }
+.btn.is-client-click::after { content: ''; display: block; position: absolute; inset: 0 auto auto 0; width: 100%; height: 150%; pointer-events: none; background: linear-gradient(transparent, #ffffff26 92%, transparent); filter: blur(2px); transition: none; animation: client-sheen 330ms linear both; }
+@keyframes client-click { from { transform: scale(.94); } to { transform: scale(1); } }
+@keyframes client-sheen { from { transform: translateY(-100%) rotate(0); } 10% { transform: translateY(-80%) rotate(-5deg); } to { transform: translateY(100%) rotate(0); } }
+@keyframes client-flare { from, to { opacity: 0; } 25% { opacity: .6; } 50% { opacity: .3; } }
+.btn-ghost { font-family: Spiegel, sans-serif; font-weight: 400; text-transform: none; letter-spacing: .025em; border-width: 1px; }
+.icon-btn, .lang-btn, .view-toggle, .view-toggle button { border-radius: 0; }
+@keyframes client-text-glow { from { text-shadow: 0 0 4px #f0e6d8; } 50% { text-shadow: 0 0 4px #f0e6d880; } to { text-shadow: 0 0 4px #f0e6d800; } }
+
+/* Collection search and framed dropdowns. The select keeps native keyboard behavior. */
+.search { border: 1px solid #785a28; border-radius: 0; background: #000b; box-shadow: 0 0 0 1px #0004, inset 0 0 0 1px #0004; color: #a09b8c; }
+.search:focus-within { border-color: #c8aa6e; box-shadow: 0 0 0 1px #0004; }
+.search input { color: #f0e6d2; font-size: 12px; }
+.search input::placeholder { color: #a09b8c; }
+.search > .icon, .search > span .icon { color: #c8aa6e; }
+.select-wrap { border: 1px solid transparent; border-image: linear-gradient(to top, #695625, #a9852d 23%, #b88d35 93%, #c8aa6e) 1; border-radius: 0; background: #1e232880; color: #a09b8c; }
+.select-wrap:is(:hover, :focus-within) { border-image: var(--client-gold-hover) 1; background: linear-gradient(to top, #58534280, #1e232880); }
+.select-wrap select { border-radius: 0; font-weight: 400; color: #cdbe91; }
+select:hover { background: transparent; }
+select::picker-icon { width: 13px; height: 18px; background: url('/league/controls/up-down-arrow.png') center no-repeat; transition: none; }
+select:open::picker-icon { transform: none; background-image: url('/league/controls/up-down-arrow-locked.png'); }
+select::picker(select) { margin-block: 1px; border: 1px solid transparent; border-image: linear-gradient(to top, #695625, #463714) 1; border-radius: 0; padding: 0; background: #010a13; backdrop-filter: none; transform: none; transition: opacity 160ms, display 160ms allow-discrete, overlay 160ms allow-discrete; }
+@starting-style { select:open::picker(select) { opacity: 0; transform: none; } }
+select option { min-height: 31px; padding: 5px 12px 5px 9px; border-radius: 0; border-top: 1px solid #1f2123; color: #cdbe91; font-size: 12px; font-weight: 400; }
+select option:checked { color: #cdbe91; background: #1e232880; font-weight: 400; }
+select option:hover, select option:focus-visible { color: #f0e6d2; background: #1e2328; }
+select option::checkmark { content: ''; width: 14px; height: 11px; background: url('/league/controls/dropdown-check.png') center no-repeat; }
+.field input, .field textarea, .input-wrap { border-radius: 0; border-color: #785a28; background: #0007; box-shadow: inset 0 0 0 1px #0004; }
+.field input:focus, .field textarea:focus, .input-wrap:focus-within { border-color: #c8aa6e; }
+
+/* Keyboard focus uses the client's brighter hover sprites. */
+.toggle-row, .radio-row { gap: 12px; border-radius: 0; }
+.toggle-row .switch, .toggle-row input:checked + .switch { order: -1; width: 14px; height: 14px; margin: 3px; border: 0; border-radius: 0; box-shadow: none; background: url('/league/controls/checkbox-spritesheet.png') 0 0 no-repeat; transition: none; }
+.toggle-row .switch::after { display: none; }
+.toggle-row:hover .switch, .toggle-row input:focus-visible + .switch { background-position-y: -14px; }
+.toggle-row input:checked + .switch { background-position-y: -28px; }
+.toggle-row:hover input:checked + .switch, .toggle-row input:checked:focus-visible + .switch { background-position-y: -42px; }
+.toggle-row input:disabled + .switch { filter: brightness(.5); }
+.radio-row input { appearance: none; border: 0; border-radius: 0; width: 20px; height: 20px; padding: 0; background: url('/league/controls/radio.png') 0 0 / 20px auto no-repeat; }
+.radio-row:hover input, .radio-row input:focus-visible { background-position-y: -20px; }
+.radio-row input:active { background-position-y: -40px; }
+.radio-row input:disabled { background-position-y: -60px; }
+.radio-row input:checked { background-position-y: -80px; }
+.radio-row:hover input:checked, .radio-row input:checked:focus-visible { background-position-y: -100px; }
+.radio-row input:checked:active { background-position-y: -120px; }
+.toggle-text strong { font-weight: 400; color: #cdbe91; }
+.toggle-text span { color: #a09b8c; }
+.interval-presets button { border-radius: 0; }
+
+/* League's navigation pointer and light are static until the selected tab changes. */
+.mode-pill, .tab-pill { display: none; }
+.mode-btn { position: relative; }
+.mode-btn[aria-selected='true'] { background: linear-gradient(0deg, #cdbe9126, transparent 55%); }
+.mode-btn[aria-selected='true']::before { content: ''; position: absolute; height: 15px; width: 30px; top: -1px; left: calc(50% - 15px); background: url('/league/controls/nav-pointer.png') center top / contain no-repeat; }
+.mode-btn[aria-selected='true']::after { content: ''; position: absolute; height: 24px; bottom: 0; left: 0; right: 0; background: url('/league/controls/nav-highlight.png') center bottom / 100% 100% no-repeat; opacity: .65; pointer-events: none; }
+.tabs { padding: 0; border: 0; border-bottom: 1px solid #463714; border-radius: 0; background: none; }
+.tabs button { font-family: Beaufort, serif; text-transform: uppercase; letter-spacing: .075em; border-radius: 0; position: relative; }
+.tabs button[aria-selected='true'] { color: #f0e6d2; background: linear-gradient(0deg, #cdbe9126, transparent); }
+.tabs button[aria-selected='true']::after { content: ''; position: absolute; height: 1px; left: 0; right: 0; bottom: -1px; background: linear-gradient(90deg, transparent, #cdbe91, transparent); }
+
+/* Replace generic CSS spinners and pulsing skeletons with the client's texture. */
+.login-steps li.active .step-icon { border: 0; background: url('/league/controls/spinner.png') center / 140% 140% no-repeat; mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1px)); animation: client-spin 4s linear infinite; }
+.login-steps li.done .step-icon { background: none; color: #c8aa6e; animation: client-fade 200ms linear; }
+.schedule.running .schedule-ring .icon { mask: none; background: url('/league/controls/spinner.png') center / contain no-repeat; width: 24px !important; height: 24px !important; animation: client-spin 4s linear infinite; }
+.rank-block.is-pending::after { inset: auto; top: calc(50% - 12px); left: calc(50% - 12px); width: 24px; height: 24px; background: url('/league/controls/spinner.png') center / contain no-repeat; animation: client-spin 4s linear infinite; }
+.card.apex::after { animation: none; }
+.card.enter-stagger, .card.enter, .accounts.mode-swap .rank-block, .accounts.mode-swap .emblem-wrap, .card.rank-arrived .rank-block, .card.rank-arrived .emblem-wrap, .tab-panel, .login-stage, .login-steps li { animation: client-fade 200ms linear both; }
+.card.card-out { animation: fade-out 200ms linear forwards; }
+.modal { animation: client-fade 200ms linear both; }
+.overlay-out .modal { animation: fade-out 200ms linear forwards; }
+.menu { border-radius: 0; border: 1px solid #785a28; background: #010a13; backdrop-filter: none; animation: client-fade 160ms linear; }
+.menu-item { border-radius: 0; color: #cdbe91; }
+.menu-item:hover, .menu-item:focus-visible { background: #1e2328; color: #f0e6d2; }
+.toast { border-radius: 0; background: #010a13; border-color: #785a28; }
+.client-tooltip { position: fixed; z-index: 20000; pointer-events: none; box-sizing: border-box; max-width: min(280px, calc(100vw - 16px)); max-height: calc(100vh - 32px); overflow-wrap: anywhere; padding: 10px 12px; border: 2px solid transparent; border-image: linear-gradient(to top, #785a28, #463714 50%) 1; background: #1a1c21; box-shadow: 0 0 0 1px #010a137a, 0 0 10px 1px #0008; color: #cdbe91; font: 12px/18px Spiegel, sans-serif; letter-spacing: .025em; animation: client-fade 160ms linear; }
+.client-tooltip::after { content: ''; position: absolute; width: 16px; height: 11px; left: calc(var(--caret-x) - 10px); bottom: -11px; background: url('/league/frame/tooltip-system-caret.png') center / contain no-repeat; }
+.client-tooltip[data-position='bottom'] { border-image: linear-gradient(to bottom, #785a28, #463714 50%) 1; }
+.client-tooltip[data-position='bottom']::after { top: -11px; bottom: auto; transform: rotate(180deg); }
+@keyframes client-spin { to { transform: rotate(1turn); } }
+@keyframes client-fade { from { opacity: 0; } to { opacity: 1; } }

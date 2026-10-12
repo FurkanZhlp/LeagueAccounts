@@ -97,8 +97,10 @@ export function modal(options: {
         <div class="modal${options.wide ? " modal-wide" : ""}" role="dialog" aria-modal="true" aria-label="${esc(options.title)}">
           <header class="modal-head">
             <h2>${esc(options.title)}</h2>
-            <button class="icon-btn" data-value="__close" aria-label="${esc(t("common.close"))}">${icon("x")}</button>
           </header>
+          <div class="modal-close-mount">
+            <button class="modal-close" data-value="__close" aria-label="${esc(t("common.close"))}"><span></span></button>
+          </div>
           <form class="modal-body" novalidate>${options.body}</form>
           <footer class="modal-foot">
             ${options.actions
@@ -130,6 +132,14 @@ export function modal(options: {
       close(value);
     };
     const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Tab") {
+        const controls = [...overlay.querySelectorAll<HTMLElement>("button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex='0']")]
+          .filter(control => control.getClientRects().length > 0);
+        const first = controls[0];
+        const last = controls.at(-1);
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+      }
       if (event.key === "Escape") {
         event.stopPropagation();
         close(null);

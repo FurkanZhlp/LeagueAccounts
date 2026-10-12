@@ -27,7 +27,7 @@
   --accent: #c8aa6e;
   --accent-2: #0ac8b9;
   --on-accent: #17120a;
-  --radius: 14px;
+  --radius: 0;
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --spring: cubic-bezier(0.34, 1.4, 0.5, 1);
   --titlebar: 46px;
@@ -54,7 +54,7 @@ body {
   overflow: hidden;
   background: var(--bg);
   color: var(--text);
-  font-family: "Inter Variable", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  font-family: Spiegel, "Segoe UI", system-ui, sans-serif;
   font-size: 14px;
   -webkit-font-smoothing: antialiased;
   user-select: none;
@@ -88,7 +88,7 @@ kbd {
   font-family: "Cascadia Mono", Consolas, monospace;
   font-size: 10.5px;
   padding: 2px 6px;
-  border-radius: 6px;
+  border-radius: 0;
   border: 1px solid var(--line-2);
   background: rgba(255, 255, 255, 0.04);
   color: var(--muted);
@@ -99,7 +99,7 @@ code {
   font-family: "Cascadia Mono", Consolas, monospace;
   font-size: 12px;
   padding: 1px 5px;
-  border-radius: 5px;
+  border-radius: 0;
   background: rgba(255, 255, 255, 0.06);
 }
 
@@ -118,7 +118,7 @@ code {
 }
 ::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
+  border-radius: 0;
   border: 3px solid transparent;
   background-clip: padding-box;
 }
@@ -216,12 +216,12 @@ code {
 .brand-icon {
   width: 22px;
   height: 22px;
-  border-radius: 6px;
+  border-radius: 0;
   pointer-events: none;
   filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent) 60%, transparent));
 }
 .brand-name {
-  font-family: "Cinzel", serif;
+  font-family: Beaufort, serif;
   font-weight: 600;
   font-size: 14px;
   letter-spacing: 0.08em;
@@ -233,7 +233,7 @@ code {
   display: grid;
   grid-template-columns: 1fr 1fr;
   padding: 4px;
-  border-radius: 12px;
+  border-radius: 0;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--line);
 }
@@ -243,7 +243,7 @@ code {
   bottom: 4px;
   left: 4px;
   width: calc(50% - 4px);
-  border-radius: 9px;
+  border-radius: 0;
   background: var(--accent);
   box-shadow:
     0 4px 18px -4px color-mix(in srgb, var(--accent) 70%, transparent),
@@ -282,7 +282,7 @@ code {
   justify-content: center;
   width: 32px;
   margin: 8px 8px 8px 0;
-  border-radius: 9px;
+  border-radius: 0;
   color: var(--muted);
   border: 1px solid var(--line);
   transition:
@@ -320,15 +320,6 @@ code {
   height: calc(100vh - var(--titlebar));
   display: grid;
   grid-template-columns: 252px 1fr;
-  opacity: 0;
-  transform: translateY(6px);
-  transition:
-    opacity 0.5s var(--ease),
-    transform 0.6s var(--ease);
-}
-body.ready .shell {
-  opacity: 1;
-  transform: none;
 }
 
 .sidebar {
@@ -363,7 +354,7 @@ body.ready .shell {
   align-items: center;
   gap: 10px;
   padding: 9px 10px;
-  border-radius: 10px;
+  border-radius: 0;
   color: var(--muted);
   font-weight: 500;
   transition:
@@ -393,7 +384,7 @@ body.ready .shell {
   align-items: center;
   gap: 8px;
   padding: 5px 8px;
-  border-radius: 9px;
+  border-radius: 0;
   font-size: 12.5px;
   color: var(--muted);
   transition:
@@ -423,7 +414,7 @@ body.ready .shell {
 }
 .dist-bar {
   height: 5px;
-  border-radius: 5px;
+  border-radius: 0;
   background: rgba(255, 255, 255, 0.05);
   overflow: hidden;
 }
@@ -463,7 +454,7 @@ body.ready .shell {
   gap: 8px;
   height: 38px;
   padding: 0 16px;
-  border-radius: 11px;
+  border-radius: 0;
   font-weight: 600;
   font-size: 13.5px;
   white-space: nowrap;
@@ -540,7 +531,7 @@ body.ready .shell {
   height: 32px;
   display: inline-grid;
   place-items: center;
-  border-radius: 9px;
+  border-radius: 0;
   color: var(--muted);
   transition:
     background 0.2s,
@@ -585,7 +576,7 @@ body.ready .shell {
   gap: 10px;
   height: 38px;
   padding: 0 10px 0 12px;
-  border-radius: 11px;
+  border-radius: 0;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--line);
   color: var(--faint);
@@ -619,7 +610,7 @@ body.ready .shell {
   gap: 6px;
   height: 38px;
   padding: 0 4px 0 12px;
-  border-radius: 11px;
+  border-radius: 0;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--line);
   max-width: 420px;
@@ -662,7 +653,7 @@ select {
   height: 30px;
   padding: 0 8px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 0;
   outline: 0;
   background: transparent;
   font-weight: 500;
@@ -721,7 +712,7 @@ select option {
   align-items: center;
   gap: 10px;
   padding: 8px 10px;
-  border-radius: 8px;
+  border-radius: 0;
   background: transparent;
   color: var(--text);
   font-weight: 400;
@@ -748,7 +739,7 @@ select option::checkmark {
   display: flex;
   padding: 3px;
   gap: 2px;
-  border-radius: 11px;
+  border-radius: 0;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--line);
 }
@@ -757,7 +748,7 @@ select option::checkmark {
   height: 30px;
   display: grid;
   place-items: center;
-  border-radius: 8px;
+  border-radius: 0;
   color: var(--faint);
   transition:
     background 0.2s,
@@ -781,6 +772,7 @@ select option::checkmark {
   gap: 8px;
 }
 
+/* Account layout; native player-card chrome lives in league.css. */
 .card {
   --tier: #6b7487;
   --tier-light: #9aa3b5;
@@ -788,87 +780,9 @@ select option::checkmark {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 16px;
-  border-radius: 16px;
-  background:
-    radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--tier) 9%, transparent), transparent 55%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.012));
-  border: 1px solid var(--line);
   outline: none;
   cursor: default;
   isolation: isolate;
-  transition:
-    transform 0.3s var(--ease),
-    border-color 0.3s,
-    box-shadow 0.35s;
-}
-.card::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  border-radius: inherit;
-  background: radial-gradient(380px circle at var(--mx, 50%) var(--my, 0%), color-mix(in srgb, var(--tier) 16%, transparent), transparent 45%);
-  opacity: 0;
-  transition: opacity 0.35s;
-}
-.card::after {
-  content: "";
-  position: absolute;
-  top: -1px;
-  left: 18%;
-  right: 18%;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--tier-light), transparent);
-  opacity: 0.55;
-}
-.card:hover {
-  transform: translateY(-3px);
-  border-color: color-mix(in srgb, var(--tier) 38%, transparent);
-  box-shadow: 0 18px 44px -18px color-mix(in srgb, var(--tier) 55%, transparent);
-}
-.card:hover::before {
-  opacity: 1;
-}
-.card.selected {
-  border-color: color-mix(in srgb, var(--accent) 70%, transparent);
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent),
-    0 18px 50px -18px color-mix(in srgb, var(--accent) 60%, transparent);
-}
-.card:focus-visible {
-  box-shadow: 0 0 0 2px var(--accent);
-}
-.card.apex {
-  background:
-    radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--tier) 15%, transparent), transparent 60%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015));
-}
-
-.card-sheen {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  border-radius: inherit;
-  overflow: hidden;
-  pointer-events: none;
-}
-.card.apex .card-sheen::after {
-  content: "";
-  position: absolute;
-  inset: -50%;
-  background: linear-gradient(115deg, transparent 45%, color-mix(in srgb, var(--tier-light) 14%, transparent) 50%, transparent 55%);
-  animation: sheen 6s ease-in-out infinite;
-}
-@keyframes sheen {
-  0%,
-  60% {
-    transform: translateX(-40%);
-  }
-  100% {
-    transform: translateX(40%);
-  }
 }
 
 .card-top {
@@ -928,7 +842,7 @@ select option::checkmark {
 .chip {
   flex: none;
   padding: 2px 7px;
-  border-radius: 6px;
+  border-radius: 0;
   font-size: 11px;
   font-weight: 600;
   color: var(--muted);
@@ -967,7 +881,7 @@ select option::checkmark {
 .rank-block {
   position: relative;
   padding: 12px 14px;
-  border-radius: 12px;
+  border-radius: 0;
   background: rgba(0, 0, 0, 0.22);
   border: 1px solid rgba(255, 255, 255, 0.04);
   overflow: hidden;
@@ -1014,7 +928,7 @@ select option::checkmark {
 .lp-bar {
   height: 5px;
   margin: 9px 0 10px;
-  border-radius: 5px;
+  border-radius: 0;
   background: rgba(255, 255, 255, 0.06);
   overflow: hidden;
 }
@@ -1133,7 +1047,7 @@ select option::checkmark {
 .btn-play {
   flex: 1;
   height: 34px;
-  border-radius: 10px;
+  border-radius: 0;
   color: color-mix(in srgb, var(--accent) 75%, white);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
@@ -1157,7 +1071,7 @@ select option::checkmark {
   align-items: center;
   gap: 18px;
   padding: 10px 14px;
-  border-radius: 13px;
+  border-radius: 0;
 }
 .accounts.list .card:hover {
   transform: translateX(3px);
@@ -1286,7 +1200,7 @@ select option::checkmark {
 
 .modal {
   width: min(460px, 100%);
-  border-radius: 18px;
+  border-radius: 0;
   background: linear-gradient(180deg, rgba(24, 30, 46, 0.96), rgba(14, 18, 28, 0.98));
   border: 1px solid var(--line-2);
   box-shadow: 0 40px 80px -20px rgba(0, 0, 0, 0.7);
@@ -1371,7 +1285,7 @@ select option::checkmark {
 }
 .drawer-head h2 {
   margin: 0;
-  font-family: "Cinzel", serif;
+  font-family: Beaufort, serif;
   font-weight: 600;
   font-size: 22px;
   letter-spacing: 0.04em;
@@ -1388,7 +1302,7 @@ select option::checkmark {
   grid-template-columns: 1fr 1fr;
   margin: 0 26px;
   padding: 4px;
-  border-radius: 12px;
+  border-radius: 0;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--line);
 }
@@ -1398,7 +1312,7 @@ select option::checkmark {
   bottom: 4px;
   left: 4px;
   width: calc(50% - 4px);
-  border-radius: 9px;
+  border-radius: 0;
   background: rgba(255, 255, 255, 0.09);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   transition: transform 0.4s var(--spring);
@@ -1452,7 +1366,7 @@ select option::checkmark {
   width: 100%;
   height: 42px;
   padding: 0 13px;
-  border-radius: 11px;
+  border-radius: 0;
   border: 1px solid var(--line-2);
   outline: 0;
   background: rgba(0, 0, 0, 0.25);
@@ -1528,7 +1442,7 @@ select option::checkmark {
   align-items: center;
   gap: 14px;
   padding: 12px 14px;
-  border-radius: 12px;
+  border-radius: 0;
   background: rgba(0, 0, 0, 0.25);
   border: 1px solid var(--line);
 }
@@ -1544,7 +1458,7 @@ select option::checkmark {
   display: flex;
   gap: 12px;
   padding: 14px;
-  border-radius: 12px;
+  border-radius: 0;
   color: #ffcf70;
   background: rgba(255, 190, 70, 0.08);
   border: 1px solid rgba(255, 190, 70, 0.25);
@@ -1576,7 +1490,7 @@ select option::checkmark {
 .menu,
 select::picker(select) {
   padding: 6px;
-  border-radius: 13px;
+  border-radius: 0;
   background: rgba(20, 25, 38, 0.97);
   backdrop-filter: blur(18px);
   border: 1px solid var(--line-2);
@@ -1610,7 +1524,7 @@ select::picker(select) {
   align-items: center;
   gap: 10px;
   padding: 8px 10px;
-  border-radius: 8px;
+  border-radius: 0;
   text-align: left;
   color: var(--text);
   transition: background 0.15s;
@@ -1656,7 +1570,7 @@ select::picker(select) {
   align-items: flex-start;
   gap: 11px;
   padding: 13px 12px 15px 14px;
-  border-radius: 13px;
+  border-radius: 0;
   background: rgba(22, 28, 42, 0.96);
   backdrop-filter: blur(16px);
   border: 1px solid var(--line-2);
@@ -1686,7 +1600,7 @@ select::picker(select) {
   place-items: center;
   width: 26px;
   height: 26px;
-  border-radius: 8px;
+  border-radius: 0;
 }
 .toast-success .toast-icon {
   color: var(--success);
@@ -1719,7 +1633,7 @@ select::picker(select) {
 .toast-close {
   color: var(--faint);
   padding: 3px;
-  border-radius: 6px;
+  border-radius: 0;
 }
 .toast-close:hover {
   color: var(--text);

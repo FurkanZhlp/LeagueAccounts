@@ -22,7 +22,8 @@ One-click login, current ranks and auto refresh — with passwords kept in Windo
 - **Auto refresh.** Ranks update in the background on your schedule, every 30 minutes by default.
 - **Duo finder.** The *Friend elo* filter shows which of your accounts can play ranked with a friend of a given rank.
 - **Safe by design.** Passwords live in Windows Credential Manager and never reach the interface. A copied password is wiped from the clipboard after 30 seconds.
-- **Made for daily use.** Launch with Windows, start minimized, keyboard shortcuts, import/export, update notifications, and 5 languages (English, Türkçe, Deutsch, Español, Français).
+- **League-native presentation.** Client rank crests, typography and Hextech frames, with brief, silent effects on interaction. Respects Windows' reduced-motion preference.
+- **Made for daily use.** Launch with Windows, start minimized, keyboard shortcuts, import/export, update notifications, and 6 languages (English, Türkçe, Deutsch, Español, Français, Português).
 
 ## Screenshots
 
@@ -112,7 +113,7 @@ The switch at the top changes every rank, sort order and filter between **League
 
 | Setting | Description |
 |---|---|
-| Language | English, Türkçe, Deutsch, Español, Français (follows your system language by default) |
+| Language | English, Türkçe, Deutsch, Español, Français, Português (follows your system language by default) |
 | Launch when Windows starts | Opens League Accounts when you sign in to Windows; optionally **start minimized** |
 | Refresh ranks automatically | On/off and interval in minutes (default 30) |
 | Login method | *Open the Riot Client and sign in* (default) or *Type into the previous window* |
@@ -168,7 +169,15 @@ npx tauri dev              # run with hot reload
 npx tauri build --no-bundle  # build target/release/LeagueAccounts.exe
 ```
 
-`npm run dev` opens the interface in a browser with demo data (no backend). `npm run screenshots` regenerates the images in `docs/screenshots` from that demo data (requires Chrome and ffmpeg).
+`npm run dev` serves the browser development preview at **http://localhost:1420**. It includes **11 synthetic accounts: one per rank from Iron through Challenger, plus Unranked, in both LoL and TFT**. A **DEV DATA** badge identifies the preview. Login, refresh, account edits and settings are simulated in memory; no real accounts, credentials, files, or Riot Client connections are used. **Reset demo** restores the sample accounts and default view, and reloading discards edits. Development UI preferences use separate storage keys. Preview mode does not change desktop account storage or login behavior.
+
+`npm run screenshots` starts an isolated demo server and regenerates the README's PNGs and GIFs from the current interface and scripted interactions. These are real captures with synthetic accounts, not separately designed mockups. Run it after UI changes; it does not regenerate on every launch. Requires Chrome and ffmpeg; set `CHROME_PATH` for another Chromium installation or `BASE_URL` to use an existing demo server.
+
+Startup shows a dark screen with the client's small, silent loading spinner until the interface, fonts, crests and background art are ready. It respects reduced motion and offers a retry action if the app fails to load.
+
+`npm run test:ui` checks cold startup with delayed scripts, fonts and images, startup failure/retry, the development rank set and reset, filters, LoL/TFT crests, keyboard navigation, Settings controls and scrolling, accessible tooltips, adding accounts, login progress and silent/reduced motion in Chrome. `npm test` runs the renderer authentication regressions.
+
+Client assets are bundled locally and pinned to patch 16.20. Builds verify their hashes with `npm run assets:verify`; `node scripts/league-assets.mjs --fetch` restores missing assets. See [asset provenance and rights](THIRD_PARTY_ASSETS.md). No client modification or Pengu installation is required to run League Accounts.
 
 | Folder | Contents |
 |---|---|
@@ -178,7 +187,7 @@ npx tauri build --no-bundle  # build target/release/LeagueAccounts.exe
 
 ## License and disclaimer
 
-League Accounts is released under the [MIT License](LICENSE).
+League Accounts' code is released under the [MIT License](LICENSE). Bundled Riot Games artwork, fonts and animations retain their original rights and are excluded from that license; see [THIRD_PARTY_ASSETS.md](THIRD_PARTY_ASSETS.md).
 
 League Accounts isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games, League of Legends and Teamfight Tactics are trademarks or registered trademarks of Riot Games, Inc. Rank data is provided by OP.GG; this project is not affiliated with OP.GG.
 

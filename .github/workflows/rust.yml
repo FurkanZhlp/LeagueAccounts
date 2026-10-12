@@ -31,6 +31,8 @@ jobs:
         run: npm run build
       - name: Renderer authentication regressions
         run: npm test
+      - name: Account interface and motion regressions
+        run: npm run test:ui
       - name: Unit and regression tests
         run: cargo +stable test --locked --workspace --all-targets
       - name: Clippy

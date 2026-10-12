@@ -4,24 +4,39 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>League Accounts</title>
+    <!-- This must precede the app module: Vite loads development styles through JS. -->
+    <style>
+      html, body { margin: 0; min-height: 100%; background: #060e17; }
+      body:not(.ready) { overflow: hidden; }
+      body:not(.ready) > :not(#startup-loader) { visibility: hidden !important; pointer-events: none !important; }
+      body:not(.ready) *, body:not(.ready) *::before, body:not(.ready) *::after { animation: none !important; transition: none !important; }
+      #startup-loader { position: fixed; inset: 0; z-index: 2147483647; display: grid; place-items: center; background: #060e17; color: #cdbe91; font: 14px/1.5 "Segoe UI", sans-serif; }
+      #startup-loader::before { content: ""; width: 40px; height: 40px; border-radius: 50%; background: url('/league/controls/spinner.png') center / 140% 140% no-repeat; mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1px)); animation: startup-spin 4s linear infinite !important; }
+      #startup-loader[data-failed]::before { display: none; }
+      #startup-error { max-width: 360px; padding: 24px; text-align: center; }
+      #startup-retry { margin-top: 16px; padding: 8px 24px; border: 1px solid #785a28; background: #1e2328; color: #f0e6d2; font: inherit; cursor: pointer; }
+      @keyframes startup-spin { to { transform: rotate(1turn); } }
+      @media (prefers-reduced-motion: reduce) { #startup-loader::before { animation: none !important; } }
+    </style>
   </head>
-  <body>
-    <div class="backdrop" aria-hidden="true">
-      <div class="orb orb-a"></div>
-      <div class="orb orb-b"></div>
-      <div class="orb orb-c"></div>
-      <div class="grain"></div>
+  <body aria-busy="true">
+    <div id="startup-loader" role="status" aria-label="Loading League Accounts">
+      <div id="startup-error" hidden>
+        <p>League Accounts couldn't finish loading.</p>
+        <button id="startup-retry" type="button">Try again</button>
+      </div>
     </div>
+    <div class="backdrop" aria-hidden="true"></div>
 
     <header class="titlebar" data-tauri-drag-region>
       <div class="brand" data-tauri-drag-region>
-        <img src="/icon.png" alt="" class="brand-icon" />
+        <img src="/icon.png" alt="" class="brand-icon" width="28" height="28" />
         <span class="brand-name" data-tauri-drag-region>League Accounts</span>
       </div>
       <div class="mode-switch" role="tablist">
         <span class="mode-pill" aria-hidden="true"></span>
-        <button role="tab" data-mode="lol" class="mode-btn" data-i18n="mode.lol"></button>
-        <button role="tab" data-mode="tft" class="mode-btn" data-i18n="mode.tft"></button>
+        <button role="tab" data-mode="lol" class="mode-btn"><img src="/league/icons/lol.png" alt="" width="23" height="23" /><span data-i18n="mode.lol"></span></button>
+        <button role="tab" data-mode="tft" class="mode-btn"><img src="/league/icons/tft.svg" alt="" width="23" height="23" /><span data-i18n="mode.tft"></span></button>
       </div>
       <div class="window-controls">
         <button class="lang-btn" id="lang" data-i18n-title="lang.label" data-i18n-aria="lang.label">
@@ -64,6 +79,20 @@
       </aside>
 
       <main class="main" data-i18n-aria="page.title">
+        <header class="collection-header">
+          <div>
+            <p class="collection-eyebrow" id="queue-label"></p>
+            <h1 data-i18n="page.title"></h1>
+          </div>
+          <div class="collection-summary">
+            <div id="dev-tools" class="dev-tools" hidden>
+              <span class="dev-badge" data-tooltip="Synthetic accounts. Actions are simulated; changes reset on reload.">DEV DATA</span>
+              <button id="reset-demo" class="text-button">Reset demo</button>
+            </div>
+            <span id="account-count" role="status"></span>
+            <button id="clear-filters" class="text-button" data-i18n="empty.clear" hidden></button>
+          </div>
+        </header>
         <div class="toolbar">
           <label class="search">
             <span data-icon="search"></span>
@@ -103,10 +132,6 @@
     <div id="menu-root"></div>
     <div id="toasts" class="toasts" aria-live="polite"></div>
 
-    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
-      <defs id="emblem-defs"></defs>
-    </svg>
-
-    <script type="module" src="/src/main.ts"></script>
+    <script type="module" src="/src/entry.ts"></script>
   </body>
 </html>

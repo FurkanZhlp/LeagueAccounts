@@ -17,6 +17,10 @@ const en = {
   "side.shortcuts": "Shortcuts",
 
   "page.title": "Accounts",
+  "page.count": "{shown} of {total} accounts",
+  "page.queueLol": "Ranked Solo / Duo",
+  "page.queueTft": "Ranked Teamfight Tactics",
+  "card.level": "Level",
   "refresh.idle": "Refresh ranks",
   "refresh.busy": "Refreshing {done}/{total}",
 
@@ -293,6 +297,10 @@ const tr: Dict = {
   "side.shortcuts": "Kısayollar",
 
   "page.title": "Hesaplar",
+  "page.count": "{total} hesaptan {shown} tanesi",
+  "page.queueLol": "Dereceli Tek / Çift",
+  "page.queueTft": "Dereceli Teamfight Tactics",
+  "card.level": "Seviye",
   "refresh.idle": "Rankları yenile",
   "refresh.busy": "Yenileniyor {done}/{total}",
 
@@ -566,6 +574,10 @@ const de: Dict = {
   "side.shortcuts": "Tastenkürzel",
 
   "page.title": "Konten",
+  "page.count": "{shown} von {total} Konten",
+  "page.queueLol": "Rangliste Solo / Duo",
+  "page.queueTft": "Rangliste Teamfight Tactics",
+  "card.level": "Level",
   "refresh.idle": "Ränge aktualisieren",
   "refresh.busy": "Aktualisiere {done}/{total}",
 
@@ -839,6 +851,10 @@ const es: Dict = {
   "side.shortcuts": "Atajos",
 
   "page.title": "Cuentas",
+  "page.count": "{shown} de {total} cuentas",
+  "page.queueLol": "Clasificatoria Solo / Dúo",
+  "page.queueTft": "Clasificatoria Teamfight Tactics",
+  "card.level": "Nivel",
   "refresh.idle": "Actualizar rangos",
   "refresh.busy": "Actualizando {done}/{total}",
 
@@ -1112,6 +1128,10 @@ const fr: Dict = {
   "side.shortcuts": "Raccourcis",
 
   "page.title": "Comptes",
+  "page.count": "{shown} comptes sur {total}",
+  "page.queueLol": "Classé Solo / Duo",
+  "page.queueTft": "Classé Teamfight Tactics",
+  "card.level": "Niveau",
   "refresh.idle": "Actualiser les rangs",
   "refresh.busy": "Actualisation {done}/{total}",
 
@@ -1385,6 +1405,10 @@ const pt: Dict = {
   "side.shortcuts": "Atalhos",
 
   "page.title": "Contas",
+  "page.count": "{shown} de {total} contas",
+  "page.queueLol": "Ranqueada Solo / Duo",
+  "page.queueTft": "Ranqueada Teamfight Tactics",
+  "card.level": "Nível",
   "refresh.idle": "Atualizar classificações",
   "refresh.busy": "A atualizar {done}/{total}",
 
@@ -1654,7 +1678,7 @@ export const LANGUAGES = [
 export type Lang = (typeof LANGUAGES)[number]["code"];
 
 const DICTS: Record<Lang, Dict> = { en, fr, es, tr, de, pt };
-const STORAGE_KEY = "leagueaccounts.lang";
+const STORAGE_KEY = import.meta.env.DEV ? "leagueaccounts.dev.lang" : "leagueaccounts.lang";
 
 function detect(): Lang {
   try {
@@ -1717,7 +1741,10 @@ export function applyStatic(root: ParentNode = document): void {
     element.placeholder = t(element.dataset.i18nPh as MessageKey);
   });
   root.querySelectorAll<HTMLElement>("[data-i18n-title]").forEach((element) => {
-    element.title = t(element.dataset.i18nTitle as MessageKey);
+    element.dataset.tooltip = t(element.dataset.i18nTitle as MessageKey);
+    if (element.tagName === "BUTTON" && !element.dataset.i18nAria) {
+      element.setAttribute("aria-label", element.dataset.tooltip);
+    }
   });
   root.querySelectorAll<HTMLElement>("[data-i18n-aria]").forEach((element) => {
     element.setAttribute("aria-label", t(element.dataset.i18nAria as MessageKey));

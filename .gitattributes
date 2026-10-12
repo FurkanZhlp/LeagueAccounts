@@ -1,0 +1,3 @@
+# The asset manifest hashes original Riot files byte-for-byte.
+# Preserve their line endings on every platform, including SVG artwork.
+ui/public/league/** -text -whitespace
