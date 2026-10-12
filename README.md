@@ -106,7 +106,7 @@ The switch at the top changes every rank, sort order and filter between **League
 ### Rank updates
 
 - Cards show the latest rank and LP to help you choose an account. Refreshing replaces that rank data; the app does not collect LP progression.
-- The **Auto refresh** button in the sidebar shows when the next refresh happens. Click it to refresh immediately. Change the interval (5 minutes to 24 hours) in **Settings → Rank updates**.
+- The **Next rank update** countdown at the top right shows when the next refresh happens. Click it to refresh immediately. Change the interval (5 minutes to 24 hours) in **Settings → Rank updates**.
 - Rank data comes from public OP.GG profile pages, two requests per account (LoL and TFT). Very short intervals with many accounts may get rate-limited.
 
 ## Settings
@@ -173,9 +173,9 @@ npx tauri build --no-bundle  # build target/release/LeagueAccounts.exe
 
 `npm run screenshots` starts an isolated demo server and regenerates the README's PNGs and GIFs from the current interface and scripted interactions. These are real captures with synthetic accounts, not separately designed mockups. Run it after UI changes; it does not regenerate on every launch. Requires Chrome and ffmpeg; set `CHROME_PATH` for another Chromium installation or `BASE_URL` to use an existing demo server.
 
-Startup shows a dark screen with the client's small, silent loading spinner until the interface, fonts, crests and background art are ready. It respects reduced motion and offers a retry action if the app fails to load.
+Startup shows a dark screen with the client's own hextech loading animation (silent) until the interface, fonts, crests and background art are ready. It respects reduced motion and offers a retry action if the app fails to load.
 
-`npm run test:ui` checks cold startup with delayed scripts, fonts and images, startup failure/retry, the development rank set and reset, filters, LoL/TFT crests, keyboard navigation, Settings controls and scrolling, accessible tooltips, adding accounts, login progress and silent/reduced motion in Chrome. `npm test` runs the renderer authentication regressions.
+`npm run test:ui` checks cold startup with delayed scripts, fonts and images, startup failure/retry, the development rank set and reset, filters, LoL/TFT crests, keyboard navigation, framed dropdowns, Settings controls and scrolling, accessible tooltips, adding accounts, login progress, long tier names on the narrowest cards, a still layout while filtering, silent refreshes and silent/reduced motion in Chrome. `npm test` runs the renderer authentication regressions.
 
 Client assets are bundled locally and pinned to patch 16.20. Builds verify their hashes with `npm run assets:verify`; `node scripts/league-assets.mjs --fetch` restores missing assets. See [asset provenance and rights](THIRD_PARTY_ASSETS.md). No client modification or Pengu installation is required to run League Accounts.
 
