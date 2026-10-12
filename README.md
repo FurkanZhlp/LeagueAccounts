@@ -51,12 +51,12 @@ One-click login, current ranks and auto refresh — with passwords kept in Windo
 
 ### Updates
 
-League Accounts updates itself. It checks GitHub for a new release when it starts and every 6 hours, downloads it in the background and verifies its signature before replacing `LeagueAccounts.exe`:
+League Accounts updates itself. It checks GitHub for a new release when it starts and every 6 hours, downloads it from this repository's releases in the background and checks it against the SHA-256 GitHub published for it before replacing `LeagueAccounts.exe`:
 
 - **Found when you open the app:** an update screen shows the download, then the new version starts.
 - **Found while the app is open:** once no login, rank refresh, dialog or match is in progress, a notice offers **Restart now** or **Later**, and restarts by itself after 10 seconds. With **Later**, the new version starts the next time you open the app.
 
-If the folder can't be written to, the download fails or the signature doesn't match, you keep your version and get an **Update available** banner with a download link instead. Turning off **Settings → Updates → Update automatically** stops all update checks; **Check now** still looks for a new version and offers it as a download. During an update, `LeagueAccounts.exe.download` and `LeagueAccounts.old.exe` appear briefly next to the app.
+If the folder can't be written to, the download fails or the file doesn't match, you keep your version and get an **Update available** banner with a download link instead. Turning off **Settings → Updates → Update automatically** stops all update checks; **Check now** still looks for a new version and offers it as a download. During an update, `LeagueAccounts.exe.download` and `LeagueAccounts.old.exe` appear briefly next to the app.
 
 Versions 3.0.3 and earlier only show the banner: download the first version with automatic updates yourself.
 
@@ -200,17 +200,9 @@ Client assets are bundled locally and pinned to patch 16.20. Builds verify their
 
 1. Set the new version in `package.json`, `src-tauri/tauri.conf.json`, `Cargo.toml` and `src-tauri/Cargo.toml`, run `npm install` and `cargo check` to update the lock files, and merge.
 2. Push a matching tag, for example `git tag v3.1.0 && git push origin v3.1.0`.
-3. The **Release** workflow builds and signs `LeagueAccounts.exe` and creates a draft release with it and `LeagueAccounts.exe.sig`. Write the notes and publish it; apps update only from published releases.
+3. The **Release** workflow builds `LeagueAccounts.exe` and creates a draft release with it. Write the notes and publish it; apps update only from published releases.
 
-The signature is what lets the app replace itself, so releases need the update signing key, set up once:
-
-```bat
-npx tauri signer generate -w "%USERPROFILE%\.tauri\leagueaccounts.key"
-gh secret set TAURI_SIGNING_PRIVATE_KEY < "%USERPROFILE%\.tauri\leagueaccounts.key"
-gh secret set TAURI_SIGNING_PRIVATE_KEY_PASSWORD
-```
-
-Commit the public half, `leagueaccounts.key.pub`, at the repository root; it is built into the app. Keep the private key and its password backed up: without them, users have to download the next release manually. See [the design note](docs/automatic-updates.md) for details.
+Every installed copy updates to whatever is published here, so keep two-factor authentication on the GitHub account. See [the design note](docs/automatic-updates.md) for details.
 
 ## License and disclaimer
 

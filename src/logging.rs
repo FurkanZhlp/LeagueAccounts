@@ -175,7 +175,7 @@ pub enum Reason {
     HttpOther,
     ResponseBody,
     ProfileMissing,
-    Signature,
+    Checksum,
     VersionMismatch,
     Other,
 }
@@ -238,7 +238,7 @@ impl Reason {
             Self::HttpOther => "http_other",
             Self::ResponseBody => "response_body",
             Self::ProfileMissing => "profile_missing",
-            Self::Signature => "signature",
+            Self::Checksum => "checksum",
             Self::VersionMismatch => "version_mismatch",
             Self::Other => "other",
         }
