@@ -56,7 +56,7 @@ League Accounts updates itself. It checks GitHub for a new release when it start
 - **Found when you open the app:** an update screen shows the download, then the new version starts.
 - **Found while the app is open:** once no login, rank refresh, dialog or match is in progress, a notice offers **Restart now** or **Later**, and restarts by itself after 10 seconds. With **Later**, the new version starts the next time you open the app.
 
-If the folder can't be written to, the download fails or the signature doesn't match, you keep your version and get an **Update available** banner with a download link instead. Turn off **Settings → Updates → Update automatically** to only get that banner. During an update, `LeagueAccounts.exe.download` and `LeagueAccounts.old.exe` appear briefly next to the app.
+If the folder can't be written to, the download fails or the signature doesn't match, you keep your version and get an **Update available** banner with a download link instead. Turning off **Settings → Updates → Update automatically** stops all update checks; **Check now** still looks for a new version and offers it as a download. During an update, `LeagueAccounts.exe.download` and `LeagueAccounts.old.exe` appear briefly next to the app.
 
 Versions 3.0.3 and earlier only show the banner: download the first version with automatic updates yourself.
 
@@ -127,7 +127,7 @@ The switch at the top changes every rank, sort order and filter between **League
 | Refresh ranks automatically | On/off and interval in minutes (default 30) |
 | Login method | *Open the Riot Client and sign in* (default) or *Type into the previous window* |
 | Launch the game after signing in | Starts LoL/TFT once sign-in is confirmed |
-| Update automatically | Installs new releases and restarts when you're not using the app; when off, only shows a download banner |
+| Update automatically | Installs new releases and restarts when you're not using the app; when off, the app checks only when you click **Check now** |
 
 ## Keyboard shortcuts
 
@@ -150,7 +150,7 @@ The switch at the top changes every rank, sort order and filter between **League
 - **Passwords** are stored in **Windows Credential Manager** (service `LeagueAccounts`). They are never written to the app's data files and never sent to the interface. Copying and login happen in the native backend.
 - **Clipboard:** copied and auto-typed credentials are excluded from Windows clipboard history and cloud sync. Copied passwords are cleared after 30 seconds, and the clipboard is cleared after every automatic login.
 - **Exports** (`Export`) contain passwords in **plain text**. The app warns you before exporting; keep such files private.
-- **Network:** the app only contacts OP.GG (public profile pages, for ranks), the Riot Client's local API on `127.0.0.1` (sign-in state), and GitHub (update check and release downloads). There is no telemetry and no account server.
+- **Network:** the app only contacts OP.GG (public profile pages, for ranks), the Riot Client's local API on `127.0.0.1` (sign-in state), and GitHub (update checks, unless turned off, and release downloads). There is no telemetry and no account server.
 - **Local data** is stored in `%APPDATA%\LeagueAccounts\`:
 
   | File | Contents |

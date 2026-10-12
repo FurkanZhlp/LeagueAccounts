@@ -31,10 +31,15 @@ pub struct Settings {
     pub login_method: LoginMethod,
     /// Launch the game for the current mode after signing in.
     pub launch_game: bool,
-    /// Install new releases automatically; when off, only notify. Settings
-    /// from before automatic updates stored this as "check for updates".
+    /// Check for and install new releases automatically; when off, GitHub is
+    /// contacted only from Settings › Check now. Settings from before automatic
+    /// updates stored this as "check for updates".
     #[serde(alias = "checkUpdates")]
     pub auto_update: bool,
+    /// A release whose executable reported an older version than the release.
+    /// It is never installed automatically, so it cannot update in a loop.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mislabeled_release: Option<String>,
     /// Unix ms of the last completed full refresh (manual or automatic).
     pub last_full_refresh: u64,
 }
@@ -56,6 +61,7 @@ impl Default for Settings {
             login_method: LoginMethod::Riot,
             launch_game: true,
             auto_update: true,
+            mislabeled_release: None,
             last_full_refresh: 0,
         }
     }
@@ -303,5 +309,8 @@ mod tests {
         assert!(!parse(r#"{"autoUpdate":false}"#));
         let saved = serde_json::to_string(&Settings::default()).unwrap();
         assert!(saved.contains(r#""autoUpdate":true"#) && !saved.contains("checkUpdates"));
+        assert!(!saved.contains("mislabeledRelease"));
+        let skipped: Settings = serde_json::from_str(r#"{"mislabeledRelease":"3.1.0"}"#).unwrap();
+        assert_eq!(skipped.mislabeled_release.as_deref(), Some("3.1.0"));
     }
 }

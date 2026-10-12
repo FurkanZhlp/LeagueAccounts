@@ -1,12 +1,13 @@
-//! Automatic updates: check at launch and every few hours, install the signed
-//! release executable in the background, and restart into it when the UI
-//! reports the app is idle (or right away from the launch update screen).
+//! Automatic updates: while they are on, check at launch and every few hours,
+//! install the signed release executable in the background, and restart into
+//! it when the UI reports the app is idle (or right away from the launch update
+//! screen). When they are off, only Settings › Check now contacts GitHub.
 //!
 //! The swap happens as soon as the download is verified, so declining the
 //! restart, closing the app or a failed restart all still start the new
 //! version next time.
 
-use crate::refresh::Shared;
+use crate::refresh::{Settings, Shared};
 use crate::views::{fail, fail_with, CommandResult};
 use leagueaccounts::logging::{self, Event, Reason};
 use leagueaccounts::self_update::{self, Paths};
@@ -16,7 +17,7 @@ use std::ffi::OsString;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tauri::{plugin::TauriPlugin, AppHandle, Emitter, Manager, RunEvent, Wry};
 
 const CHECK_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
@@ -61,15 +62,15 @@ pub struct Updater {
     /// One check or install at a time, from the scheduler or Settings.
     busy: AtomicBool,
     paths: Option<Paths>,
-    /// The release this process was installed for, when it reports an older
-    /// version: that release is only offered for download from now on.
+    /// A release whose executable reported an older version: it is only
+    /// offered for download from now on (see `Settings::mislabeled_release`).
     mislabeled: Option<String>,
     /// Arguments for the new version, set when the app exits to restart.
     restart: Mutex<Option<Vec<OsString>>>,
 }
 
-impl Default for Updater {
-    fn default() -> Self {
+impl Updater {
+    pub fn new(settings: &Settings) -> Self {
         Self {
             status: Mutex::new(UpdateStatus {
                 phase: Phase::Idle,
@@ -77,19 +78,17 @@ impl Default for Updater {
                 release: None,
                 received: 0,
                 total: 0,
-                launch: true,
+                // No launch check, and so no wait on the loading screen, when off.
+                launch: settings.auto_update,
                 seq: 0,
             }),
             busy: AtomicBool::new(false),
             paths: Paths::current(),
-            mislabeled: self_update::installed_release(&std::env::args_os().collect::<Vec<_>>())
-                .filter(|release| updates::is_newer(release, env!("CARGO_PKG_VERSION"))),
+            mislabeled: settings.mislabeled_release.clone(),
             restart: Mutex::new(None),
         }
     }
-}
 
-impl Updater {
     pub fn status(&self) -> UpdateStatus {
         self.status.lock().unwrap_or_else(|error| error.into_inner()).clone()
     }
@@ -225,24 +224,31 @@ fn download_and_swap(app: &AppHandle, job: &Install) -> Result<(), (Event, Updat
     self_update::swap(&job.paths).map_err(|error| failed(error.into()))
 }
 
-/// Check right away at launch, then every few hours, until an update is installed.
+/// While automatic updates are on, check right away at launch and then every
+/// few hours, until an update is installed. Turning them on in Settings starts
+/// a check within a minute.
 pub fn spawn(app: AppHandle, shared: Arc<Shared>) {
     thread::spawn(move || {
         let mut launch = true;
+        let mut next_check = Instant::now();
         loop {
-            let wait = match check(&app, &shared, launch) {
-                Ok(Some(job)) => {
-                    install(&app, job);
-                    CHECK_INTERVAL
-                }
-                Ok(None) => CHECK_INTERVAL,
-                Err(_) => RETRY_INTERVAL,
-            };
+            let automatic = shared.settings.lock().map(|settings| settings.auto_update).unwrap_or(false);
+            if automatic && Instant::now() >= next_check {
+                let wait = match check(&app, &shared, launch) {
+                    Ok(Some(job)) => {
+                        install(&app, job);
+                        CHECK_INTERVAL
+                    }
+                    Ok(None) => CHECK_INTERVAL,
+                    Err(_) => RETRY_INTERVAL,
+                };
+                next_check = Instant::now() + wait;
+            }
             if shared.updater.installed() {
                 return;
             }
             launch = false;
-            thread::sleep(wait);
+            thread::sleep(Duration::from_secs(60));
         }
     });
 }
@@ -326,10 +332,16 @@ pub fn finish_previous_update() {
     if previous.is_some() {
         logging::record(Event::UpdateRestarted, Reason::None);
     }
-    let installed = self_update::installed_release(&args);
-    if installed.is_some_and(|release| updates::is_newer(&release, env!("CARGO_PKG_VERSION"))) {
+    if mislabeled_release().is_some() {
         logging::record(Event::UpdateFailed, Reason::VersionMismatch);
     }
+}
+
+/// The release this process was installed for, if this build reports an older
+/// version: installing it again would restart into the same build forever.
+pub fn mislabeled_release() -> Option<String> {
+    self_update::installed_release(&std::env::args_os().collect::<Vec<_>>())
+        .filter(|release| updates::is_newer(release, env!("CARGO_PKG_VERSION")))
 }
 
 pub fn start_minimized_after_restart() -> bool {

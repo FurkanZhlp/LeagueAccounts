@@ -4,9 +4,12 @@ name: Release
 # builds and signs LeagueAccounts.exe and creates a draft release with both
 # files; write the notes and publish it. Automatic updates read published
 # releases only, so nothing reaches users before that.
+#
+# Plain versions only: a pre-release tag such as v3.1.0-beta would publish as
+# the latest release, and apps compare it as equal to v3.1.0.
 on:
   push:
-    tags: ["v*.*.*"]
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
 
 permissions:
   contents: write
@@ -28,6 +31,10 @@ jobs:
           SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: |
           version="${GITHUB_REF_NAME#v}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::$GITHUB_REF_NAME is not a plain vX.Y.Z release tag"
+            exit 1
+          fi
           check() {
             if [ "$2" != "$version" ]; then
               echo "::error file=$1::$1 says $2 but the tag is $GITHUB_REF_NAME"

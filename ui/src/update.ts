@@ -187,12 +187,18 @@ function showRestartNotice(): void {
     element.querySelectorAll("button").forEach((button) => (button.disabled = true));
     if (!(await restart())) close();
   };
+  // A match may have started during the countdown; Restart now skips this.
+  const restartIfIdle = async () => {
+    clearInterval(timer);
+    if (await api.updateIdle().catch(() => false)) await restartNow();
+    else close();
+  };
   const timer = setInterval(() => {
     // Something started: ask again once the app is idle.
     if (busy()) return close();
     seconds -= 1;
     if (seconds > 0) render();
-    else void restartNow();
+    else void restartIfIdle();
   }, 1000);
   render();
   $("#toasts").before(element);

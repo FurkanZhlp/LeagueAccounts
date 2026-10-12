@@ -637,7 +637,13 @@ fn main() {
         .err()
         .map(|error| fail_with("load_failed", error));
     let settings_path = settings_file().ok();
-    let settings = Settings::load(settings_path.as_ref());
+    let mut settings = Settings::load(settings_path.as_ref());
+    // Remember a mislabeled release across launches, not just this restart.
+    if let Some(release) = updater::mislabeled_release() {
+        settings.mislabeled_release = Some(release);
+        settings.save(settings_path.as_ref());
+    }
+    let updater = Updater::new(&settings);
     let start_minimized = (settings.start_minimized && std::env::args().any(|arg| arg == AUTOSTART_FLAG))
         || updater::start_minimized_after_restart();
 
@@ -648,7 +654,7 @@ fn main() {
         refresh_running: Mutex::new(false),
         clipboard_generation: AtomicU64::new(0),
         login: Arc::new(LoginControl::default()),
-        updater: Updater::default(),
+        updater,
         load_error,
     });
 
