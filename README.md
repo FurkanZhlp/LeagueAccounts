@@ -97,7 +97,7 @@ Press **Log in** on a card (or `Ctrl+Shift+V` with the account selected). League
 1. Open the Riot Client.
 2. Wait until it is fully loaded and showing its login screen.
 3. Submit your username and password through Riot's login form.
-4. Wait until the Riot Client confirms you are signed in, then launch the game.
+4. Wait until the Riot Client confirms you are signed in, then launch the game. After submitting your credentials, the Riot Client window is not reopened while the game starts; it comes back only if the launch fails or you cancel.
 
 A full-screen progress view shows each step, and you can cancel at any time. For safety:
 
