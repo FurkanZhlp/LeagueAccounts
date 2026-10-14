@@ -94,10 +94,10 @@ export function installMock(): void {
     accounts.forEach((account, index) => {
       account.rankProvenance = {
         source: "OP.GG", fetchedAt: Date.now(), sourceUpdatedAt: Date.now() - (index ? 3_600_000 : 0),
-        freshness: index ? "stale" : "fresh", renewalAttempted: Boolean(index), renewalSucceeded: !index,
+        freshness: index ? "stale" : "fresh", freshUntil: index ? null : Date.now() + 15 * 60_000, renewalAttempted: Boolean(index), renewalSucceeded: !index,
         error: errors[index % errors.length],
       };
-      account.tftProvenance = { ...account.rankProvenance, freshness: "unknown", sourceUpdatedAt: null, renewalAttempted: false, renewalSucceeded: false, error: null };
+      account.tftProvenance = { ...account.rankProvenance, freshness: "unknown", freshUntil: null, sourceUpdatedAt: null, renewalAttempted: false, renewalSucceeded: false, error: null };
     });
   }
   const find = (key: Key) => accounts.find((account) => keyId(account) === keyId(key));
