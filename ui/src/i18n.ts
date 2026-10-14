@@ -16,7 +16,6 @@ const en = {
   "mode.lol": "League of Legends",
   "mode.tft": "Teamfight Tactics",
   "win.minimize": "Minimize",
-  "win.maximize": "Maximize",
   "win.close": "Close",
 
   "side.add": "Add account",
@@ -312,7 +311,6 @@ const tr: Dict = {
   "mode.lol": "League of Legends",
   "mode.tft": "Teamfight Tactics",
   "win.minimize": "Küçült",
-  "win.maximize": "Büyüt",
   "win.close": "Kapat",
 
   "side.add": "Hesap ekle",
@@ -605,7 +603,6 @@ const de: Dict = {
   "mode.lol": "League of Legends",
   "mode.tft": "Teamfight Tactics",
   "win.minimize": "Minimieren",
-  "win.maximize": "Maximieren",
   "win.close": "Schließen",
 
   "side.add": "Konto hinzufügen",
@@ -898,7 +895,6 @@ const es: Dict = {
   "mode.lol": "League of Legends",
   "mode.tft": "Teamfight Tactics",
   "win.minimize": "Minimizar",
-  "win.maximize": "Maximizar",
   "win.close": "Cerrar",
 
   "side.add": "Añadir cuenta",
@@ -1191,7 +1187,6 @@ const fr: Dict = {
   "mode.lol": "League of Legends",
   "mode.tft": "Teamfight Tactics",
   "win.minimize": "Réduire",
-  "win.maximize": "Agrandir",
   "win.close": "Fermer",
 
   "side.add": "Ajouter un compte",
@@ -1484,7 +1479,6 @@ const pt: Dict = {
   "mode.lol": "League of Legends",
   "mode.tft": "Teamfight Tactics",
   "win.minimize": "Minimizar",
-  "win.maximize": "Maximizar",
   "win.close": "Fechar",
 
   "side.add": "Adicionar conta",
