@@ -287,6 +287,19 @@ test("account collection, client frames and silent motion", { timeout: 180000 },
       await page.waitForSelector("#schedule:not(.running)", { timeout: 60000 });
       assert.equal(await page.$(".toast"), null);
     });
+    await t.test("source freshness and errors remain visible without changing ranks", async () => {
+      await open("freshness");
+      const statuses = await page.$$eval(".rank-provenance", els => els.map(el => el.textContent));
+      assert.ok(statuses.some(text => /Updated .*OP\.GG/.test(text)));
+      for (const error of ["Rate limited", "Access blocked", "Parsing failed", "Request timed out", "Provider unavailable", "Refresh failed"]) {
+        assert.ok(statuses.some(text => text.includes(error)), error);
+      }
+      assert.equal(await page.$$eval("#accounts > .card", cards => cards.every(card => !card.querySelector(".rank-provenance") || card.querySelector(".rank-name").textContent.trim())), true);
+      await page.click('[data-mode="tft"]');
+      const tft = await page.$$eval(".rank-provenance", els => els.map(el => el.textContent));
+      assert.ok(tft.every(text => text.includes("Freshness unknown")));
+      assert.ok(tft.every(text => !text.includes("Updated")));
+    });
     assert.deepEqual(errors, []);
   } finally {
     await demo.close();

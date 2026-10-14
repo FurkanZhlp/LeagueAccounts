@@ -124,6 +124,20 @@ function cardSignature(account: AccountView, pending: boolean): string {
   return JSON.stringify([account, state.mode, pending, lang()]);
 }
 
+function provenanceLine(account: AccountView): string {
+  const data = state.mode === "tft" ? account.tftProvenance : account.rankProvenance;
+  if (!data || !account.name || account.riotIdNotFound) return "";
+  const at = data.sourceUpdatedAt;
+  // A saved "fresh" state must age while the application is closed, too.
+  const fresh = data.freshness === "fresh" && at != null && Date.now() - at <= 15 * 60_000;
+  const error = data.error ? t(`freshness.${data.error}`) : "";
+  const label = fresh && !error
+    ? t("freshness.updated", { time: new Date(at!).toLocaleTimeString(lang(), { hour: "2-digit", minute: "2-digit" }) })
+    : t(data.freshness === "unknown" && !error ? "freshness.unknown" : "freshness.stale");
+  const detail = [at != null ? new Date(at).toLocaleString(lang()) : t("freshness.unknown"), error].filter(Boolean).join(" · ");
+  return `<div class="rank-provenance${error ? " has-error" : ""}" data-tooltip="${esc(detail)}">${esc(label)} · ${esc(data.source)}${error ? ` · ${esc(error)}` : ""}</div>`;
+}
+
 function cardInner(account: AccountView, pending: boolean): string {
   const rank = rankOf(account, state.mode);
   const tier = normalizeTier(rank.tier);
@@ -155,7 +169,7 @@ function cardInner(account: AccountView, pending: boolean): string {
       `}
       </div>
     </div>
-    ${account.name && !account.riotIdNotFound ? `<div class="history">${historyLine(account)}</div>` : ""}
+    ${account.name && !account.riotIdNotFound ? `<div class="history">${historyLine(account)}${provenanceLine(account)}</div>` : ""}
     ${account.description ? `<p class="desc" data-tooltip="${esc(account.description)}">${esc(account.description)}</p>` : `<p class="desc desc-empty"></p>`}
     <div class="card-actions">
       <button class="btn btn-play" data-act="login" data-tooltip="${esc(t("card.loginTitle"))}">${icon("login", 15)}${esc(t("card.login"))}</button>
@@ -481,13 +495,13 @@ function openMenu(account: AccountView, x: number, y: number): void {
   ]);
 }
 
-async function refreshAll(): Promise<void> {
+async function refreshAll(force = false): Promise<void> {
   if (state.refreshing || state.schedule?.running) return;
   state.refreshing = true;
   state.refreshTotal = 0;
   state.refreshDone = 0;
   renderSchedule();
-  const count = await guard(() => api.refreshRanks(), "toast.refreshFailed");
+  const count = await guard(() => api.refreshRanks(force), "toast.refreshFailed");
   if (count === undefined) {
     state.refreshing = false;
     renderSchedule();
@@ -873,6 +887,7 @@ function showShortcuts(): void {
     ["Ctrl + F", t("sc.search")],
     ["Ctrl + N", t("sc.add")],
     ["Ctrl + R / F5", t("sc.refresh")],
+    ["Ctrl + Shift + R / Shift + F5", `${t("sc.refresh")} (force)`],
     ["Ctrl + 1 / 2", t("sc.mode")],
     ["Ctrl + ,", t("sc.settings")],
     [t("sc.dblclick"), t("sc.dblclickText")],
@@ -1075,7 +1090,7 @@ function onKeyDown(event: KeyboardEvent): void {
 
   if ((ctrl && key === "r") || event.key === "F5") {
     event.preventDefault();
-    if (!overlayOpen) void refreshAll();
+    if (!overlayOpen) void refreshAll(event.shiftKey);
     return;
   }
   if (overlayOpen) return;

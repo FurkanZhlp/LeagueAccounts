@@ -356,6 +356,7 @@ impl AccountManager {
                     item.finished_last_season
                 },
                 tft: item.tft,
+                ..Account::default()
             };
             accounts.push(account);
         }
@@ -547,6 +548,7 @@ mod tests {
                 reached_last_season: "Platinum IV".into(),
                 finished_last_season: "Gold I".into(),
                 tft: None,
+                ..RankInfo::default()
             }
         }
     }
