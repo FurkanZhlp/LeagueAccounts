@@ -1144,15 +1144,12 @@ function onKeyDown(event: KeyboardEvent): void {
 async function wireWindow(): Promise<void> {
   const { getCurrentWindow } = await import("@tauri-apps/api/window");
   const appWindow = getCurrentWindow();
-  const buttons: Record<string, [string, () => Promise<void>]> = {
-    minimize: ["window-hide", () => appWindow.minimize()],
-    maximize: ["square", () => appWindow.toggleMaximize()],
-    close: ["x", () => appWindow.close()],
+  const actions: Record<string, () => Promise<void>> = {
+    minimize: () => appWindow.minimize(),
+    close: () => appWindow.close(),
   };
   document.querySelectorAll<HTMLButtonElement>("[data-win]").forEach((button) => {
-    const [name, run] = buttons[button.dataset.win ?? ""];
-    button.innerHTML = icon(name, name === "square" ? 12 : 15);
-    button.addEventListener("click", () => void run());
+    button.addEventListener("click", () => void actions[button.dataset.win ?? ""]());
   });
 }
 
@@ -1201,10 +1198,6 @@ const uiBusy = (): boolean =>
 
 /** Dev-only: `?scene=` opens a screen with demo data (used for README screenshots). */
 function runDemoScene(): void {
-  document.querySelectorAll<HTMLButtonElement>("[data-win]").forEach((button) => {
-    const names: Record<string, string> = { minimize: "window-hide", maximize: "square", close: "x" };
-    button.innerHTML = icon(names[button.dataset.win ?? ""], button.dataset.win === "maximize" ? 12 : 15);
-  });
   const scene = new URLSearchParams(location.search).get("scene");
   const byName = (part: string) => state.accounts.find((account) => account.name.includes(part))!;
   const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
