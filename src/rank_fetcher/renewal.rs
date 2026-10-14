@@ -13,6 +13,7 @@ pub const AUTO_MAX_AGE: Duration = Duration::from_secs(15 * 60);
 pub const RENEWAL_TIMEOUT: Duration = Duration::from_secs(20);
 pub const MAX_CONCURRENT_RENEWALS: usize = 2;
 const FAILED_RETRY_DELAY: Duration = Duration::from_secs(60);
+const ACTION_CACHE_MAX_AGE: Duration = Duration::from_secs(15 * 60);
 const ASSET_TIMEOUT: Duration = Duration::from_secs(3);
 
 #[derive(Default)]
@@ -26,6 +27,8 @@ pub(super) struct RenewalState {
 
 struct CachedActions {
     build: String,
+    /// The asset that supplied both references. Other profile chunks can differ.
+    script_url: Option<String>,
     result: Result<Actions, RankFetchError>,
     at: Instant,
 }
@@ -41,6 +44,20 @@ impl Drop for Permit {
 }
 
 impl RenewalState {
+    fn invalidate_action(&self, action: &str) {
+        if let Ok(mut cache) = self.actions.lock() {
+            // A late response from an old worker must not erase newer references.
+            if cache.as_ref().is_some_and(|cached| {
+                cached
+                    .result
+                    .as_ref()
+                    .is_ok_and(|actions| action == actions.renewal || action == actions.status)
+            }) {
+                *cache = None;
+            }
+        }
+    }
+
     pub(super) fn rate_limited(&self) -> bool {
         self.cooldown
             .lock()
@@ -225,6 +242,18 @@ fn remaining(deadline: Instant) -> Result<Duration, RankFetchError> {
 
 impl RankFetcher {
     fn discover_actions(&self, body: &str, deadline: Instant) -> Result<Actions, RankFetchError> {
+        self.discover_actions_with(body, deadline, |url, timeout| {
+            self.request_text(self.client.get(url).timeout(timeout))
+                .map_err(super::fetch_error)
+        })
+    }
+
+    fn discover_actions_with(
+        &self,
+        body: &str,
+        deadline: Instant,
+        mut fetch_bundle: impl FnMut(&str, Duration) -> Result<String, RankFetchError>,
+    ) -> Result<Actions, RankFetchError> {
         static SCRIPTS: LazyLock<Regex> = LazyLock::new(|| {
             Regex::new(
             r#"<script[^>]+src="(https://c-lol-web\.op\.gg/[^"<>]+/_next/static/chunks/[^"<>]+\.js)""#
@@ -237,8 +266,8 @@ impl RankFetcher {
         if scripts.is_empty() || scripts.len() > 64 {
             return Err(RankFetchError::ParsingFailed);
         }
-        // One discovery per build, shared by all workers. Also cache discovery failures
-        // briefly so an upstream layout change does not download bundles per account.
+        // Share valid references across profiles, but rediscover on action-asset
+        // rotation or expiry even if the release prefix stays the same.
         let mut cache = self
             .renewal
             .actions
@@ -250,19 +279,26 @@ impl RankFetcher {
             .unwrap_or_default()
             .to_owned();
         if let Some(cached) = &*cache {
-            if cached.build == build
-                && (cached.result.is_ok() || cached.at.elapsed() < FAILED_RETRY_DELAY)
-            {
+            let reusable = if cached.result.is_ok() {
+                cached.at.elapsed() < ACTION_CACHE_MAX_AGE
+                    && cached
+                        .script_url
+                        .as_ref()
+                        .is_some_and(|url| scripts.contains(url))
+            } else {
+                cached.at.elapsed() < FAILED_RETRY_DELAY
+            };
+            if cached.build == build && reusable {
                 return cached.result.clone();
             }
         }
+        let mut script_url = None;
         let result = (|| {
             for url in scripts.iter().rev() {
                 let timeout = remaining(deadline)?.min(ASSET_TIMEOUT);
-                let bundle = self
-                    .request_text(self.client.get(url).timeout(timeout))
-                    .map_err(super::fetch_error)?;
+                let bundle = fetch_bundle(url, timeout)?;
                 if let Some(actions) = Actions::parse(&bundle) {
+                    script_url = Some(url.clone());
                     return Ok(actions);
                 }
             }
@@ -270,6 +306,7 @@ impl RankFetcher {
         })();
         *cache = Some(CachedActions {
             build,
+            script_url,
             result: result.clone(),
             at: Instant::now(),
         });
@@ -283,7 +320,7 @@ impl RankFetcher {
         arguments: Value,
         deadline: Instant,
     ) -> Result<RenewalResponse, RankFetchError> {
-        let body = self
+        let result = self
             .request_text(
                 self.client
                     .post(url)
@@ -294,10 +331,17 @@ impl RankFetcher {
                     .body(json!([arguments]).to_string())
                     .timeout(remaining(deadline)?),
             )
-            .map_err(super::fetch_error)?;
-        let result = parse_response(&body);
-        if result == Err(RankFetchError::RateLimited) {
-            self.renewal.set_cooldown(None);
+            .map_err(super::fetch_error)
+            .and_then(|body| parse_response(&body));
+        match result {
+            Err(RankFetchError::RateLimited) => self.renewal.set_cooldown(None),
+            // A missing action or an unrecognized Flight result can indicate
+            // rotated references. Refresh discovery on the next allowed attempt;
+            // never replay a POST after an ambiguous timeout/server failure.
+            Err(RankFetchError::ProfileNotFound | RankFetchError::ParsingFailed) => {
+                self.renewal.invalidate_action(action);
+            }
+            _ => {}
         }
         result
     }
@@ -432,6 +476,9 @@ mod tests {
         };
         *fetcher.renewal.actions.lock().unwrap() = Some(CachedActions {
             build: "https://c-lol-web.op.gg/test-build".into(),
+            script_url: Some(
+                "https://c-lol-web.op.gg/test-build/_next/static/chunks/test.js".into(),
+            ),
             result: Ok(Actions {
                 renewal: "renew".into(),
                 status: "status".into(),
@@ -457,6 +504,148 @@ mod tests {
             .format(&time::format_description::well_known::Rfc3339)
             .unwrap();
         format!(r#"1:{{"status":"RENEWAL_FINISH","lastUpdatedAt":"{date}"}}"#)
+    }
+
+    fn rotated_bundle() -> String {
+        include_str!("../../tests/fixtures/opgg-actions.js")
+            .replace(
+                "405a04669583947dc03eb8c7f367adf28c8f714e86",
+                &"a".repeat(40),
+            )
+            .replace(
+                "400c02bdfd8c90756a329b312a7455e73880ad43ec",
+                &"b".repeat(40),
+            )
+    }
+
+    #[test]
+    fn cache_rediscovers_rotated_action_asset_under_the_same_release_prefix() {
+        let fetcher = RankFetcher::default();
+        let body = profile(now_ms(), 10);
+        let deadline = Instant::now() + RENEWAL_TIMEOUT;
+        let original = fetcher
+            .discover_actions_with(&body, deadline, |_, _| {
+                Ok(include_str!("../../tests/fixtures/opgg-actions.js").into())
+            })
+            .unwrap();
+        // Match/history chunks can differ between accounts without a deployment.
+        let other_profile = format!(
+            r#"{body}<script src="https://c-lol-web.op.gg/test-build/_next/static/chunks/other-profile.js"></script>"#
+        );
+        assert_eq!(
+            fetcher
+                .discover_actions_with(&other_profile, deadline, |_, _| {
+                    panic!("unchanged action asset should stay shared across accounts")
+                })
+                .unwrap(),
+            original
+        );
+        let changed = body.replace("/chunks/test.js", "/chunks/new-actions.js");
+        let updated = fetcher
+            .discover_actions_with(&changed, deadline, |url, _| {
+                assert!(url.ends_with("/chunks/new-actions.js"));
+                Ok(rotated_bundle())
+            })
+            .unwrap();
+        assert_ne!(updated, original);
+        assert_eq!(updated.renewal, "a".repeat(40));
+        assert_eq!(updated.status, "b".repeat(40));
+    }
+
+    #[test]
+    fn discovery_expires_successes_and_keeps_failure_backoff_bounded() {
+        let fetcher = RankFetcher::default();
+        let body = profile(now_ms(), 10);
+        let deadline = Instant::now() + RENEWAL_TIMEOUT;
+        fetcher
+            .discover_actions_with(&body, deadline, |_, _| {
+                Ok(include_str!("../../tests/fixtures/opgg-actions.js").into())
+            })
+            .unwrap();
+        fetcher.renewal.actions.lock().unwrap().as_mut().unwrap().at =
+            Instant::now() - ACTION_CACHE_MAX_AGE;
+        let updated = fetcher
+            .discover_actions_with(&body, deadline, |_, _| Ok(rotated_bundle()))
+            .unwrap();
+        assert_eq!(updated.renewal, "a".repeat(40));
+
+        *fetcher.renewal.actions.lock().unwrap() = None;
+        assert_eq!(
+            fetcher.discover_actions_with(&body, deadline, |_, _| Err(
+                RankFetchError::ProviderUnavailable
+            )),
+            Err(RankFetchError::ProviderUnavailable)
+        );
+        assert_eq!(
+            fetcher.discover_actions_with(&body, deadline, |_, _| panic!(
+                "discovery failure should back off"
+            )),
+            Err(RankFetchError::ProviderUnavailable)
+        );
+        fetcher.renewal.actions.lock().unwrap().as_mut().unwrap().at =
+            Instant::now() - FAILED_RETRY_DELAY;
+        assert!(fetcher
+            .discover_actions_with(&body, deadline, |_, _| Ok(rotated_bundle()))
+            .is_ok());
+    }
+
+    #[test]
+    fn action_contract_errors_clear_cache_and_next_discovery_recovers() {
+        for (http, body, invalidate) in [
+            (404, "Failed to find Server Action", true),
+            (200, "0:{}\n1:E{\"digest\":\"unknown_action\"}", true),
+            (403, "blocked", false),
+            (429, "limited", false),
+            (503, "unavailable", false),
+            (200, "1:{\"status\":\"RENEWAL_FAILED\"}", false),
+        ] {
+            let (fetcher, url, thread) = server(vec![("POST", http, body.into())]);
+            let result = fetcher.call_update(
+                &url,
+                "renew",
+                json!({"region":"kr","puuid":"fixture-own-puuid"}),
+                Instant::now() + RENEWAL_TIMEOUT,
+            );
+            thread.join().unwrap();
+            assert!(result.is_err());
+            assert_eq!(
+                fetcher.renewal.actions.lock().unwrap().is_none(),
+                invalidate,
+                "HTTP {http}: {body}"
+            );
+            if invalidate {
+                let updated = fetcher
+                    .discover_actions_with(
+                        &profile(now_ms(), 10),
+                        Instant::now() + RENEWAL_TIMEOUT,
+                        |_, _| Ok(rotated_bundle()),
+                    )
+                    .unwrap();
+                assert_eq!(updated.renewal, "a".repeat(40));
+                assert_eq!(updated.status, "b".repeat(40));
+            }
+        }
+    }
+
+    #[test]
+    fn late_old_action_error_does_not_erase_new_cache_and_poll_error_invalidates() {
+        let (fetcher, _, thread) = server(vec![]);
+        thread.join().unwrap();
+        fetcher
+            .renewal
+            .actions
+            .lock()
+            .unwrap()
+            .as_mut()
+            .unwrap()
+            .result = Ok(Actions {
+            renewal: "new-renew".into(),
+            status: "new-status".into(),
+        });
+        fetcher.renewal.invalidate_action("renew");
+        assert!(fetcher.renewal.actions.lock().unwrap().is_some());
+        fetcher.renewal.invalidate_action("new-status");
+        assert!(fetcher.renewal.actions.lock().unwrap().is_none());
     }
 
     #[test]
@@ -581,15 +770,25 @@ mod tests {
                 .unwrap(),
             renewal: Arc::default(),
         };
+        fetcher
+            .discover_actions_with(
+                &profile(now_ms(), 10),
+                Instant::now() + RENEWAL_TIMEOUT,
+                |_, _| Ok(rotated_bundle()),
+            )
+            .unwrap();
         assert_eq!(
             fetcher.call_update(
                 &url,
-                "renew",
+                &"a".repeat(40),
                 json!({}),
                 Instant::now() + Duration::from_millis(100)
             ),
             Err(RankFetchError::Timeout)
         );
+        // The timed-out POST may have been accepted upstream; keep the valid
+        // references and let normal scheduling/cooldowns govern the next attempt.
+        assert!(fetcher.renewal.actions.lock().unwrap().is_some());
         server.join().unwrap();
     }
 

@@ -48,8 +48,14 @@ Reference hashes in the captured build were
 `405a04669583947dc03eb8c7f367adf28c8f714e86` (renewal) and
 `400c02bdfd8c90756a329b312a7455e73880ad43ec` (status).
 They appear only in test fixtures/research, **not pinned in production code**.
-Production discovers the references and caches them once per release build,
-shared across account workers. A changed build triggers discovery again.
+Production discovers the references and shares them across account workers for
+up to 15 minutes. A changed release prefix or replacement of the asset containing
+the action references triggers discovery immediately. Unrelated match/history
+chunks may differ between profiles without invalidating the shared references.
+An action POST returning 404 or an unrecognized Flight result clears the matching
+references for discovery on the next allowed refresh. Timeouts, 403/429 and server
+failures do not replay POSTs or trigger unnecessary asset discovery. Late errors
+from old requests cannot erase already rotated references.
 Initial discovery required 16 ordinary asset GETs in the Python experiment;
 subsequent renewals in the same process reuse the references.
 
@@ -136,7 +142,8 @@ relative to an independently verified just-completed match remain unverified.
 LeagueOfGraphs fallback is deliberately absent because normal HTTP access was
 blocked, and MCP supplies no verified refresh capability.
 
-For a local test, use `target/release/LeagueAccounts.exe`; the original executable
+For a local test of the review fix, use
+`target/review-fix/release/LeagueAccounts.exe`; the original executable
 beside the repository has not been replaced. **Disable Settings → Updates →
 Update automatically while testing this branch**: the inherited updater still
 points to Tariolle/LeagueAccounts, and a later upstream release could replace the
@@ -161,8 +168,9 @@ This five-account interactive check has not been performed on the user's account
 - `cargo fmt --all` executed; unrelated pre-existing formatting changes were
   removed from the diff. Changed parser/model/test modules are rustfmt formatted.
 - `cargo check --locked --workspace --all-targets`: passed.
-- `cargo test --locked --workspace --all-targets`: final run passed, 98 tests.
-  A sequential run with `-- --test-threads=1` also passed all 98.
+- `cargo test --locked --workspace --all-targets`: review-fix run passed, 102 tests.
+  Before the cache fix, a sequential run with `-- --test-threads=1` also passed
+  all 98 tests present at that point.
 - `cargo clippy --locked --workspace --all-targets -- -D warnings`: passed.
 - `npm ci`, `npm run build` (assets, TypeScript, Vite), `npm test`: passed.
 - `npm run test:ui`: final run passed all 24 checks with `CHROME_PATH` set to
@@ -179,3 +187,14 @@ established and those unrelated systems were not changed. An initial loopback
 test flake was fixed by explicitly making accepted Windows sockets blocking.
 No CAPTCHA/Cloudflare challenge was solved or bypassed. The original app and
 the user's saved accounts were not used for the network experiments.
+
+The P2 cache review is covered by four additional offline regressions: replacement
+of the action asset under the same release prefix (while unrelated profile chunks
+still reuse the cache), successful/failed discovery expiry, HTTP/Flight contract
+failure followed by discovery of new references, and protection against late
+errors invalidating newer references. The existing timeout test now also verifies
+that a real timed-out POST leaves the valid cache intact. A post-fix public
+`reqwest` probe for Oner#KR1 completed renewal with verified fresh LoL HTML and
+independent TFT parsing in 7.081 seconds, without errors. Actual OP.GG deployments
+cannot be forced by this test; reference rotation is exercised with offline assets
+and loopback HTTP responses.
