@@ -12,25 +12,59 @@ const OUT = resolve("docs/screenshots");
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Static screens: scene -> wait for animations to settle.
-const STILLS = { main: 1000, tft: 1000, list: 1000, settings: 1000, add: 1000, menu: 1000, login: 2200 };
+const STILLS = { tft: 1000, list: 1000, settings: 1000, add: 1000, menu: 1000 };
+
+// Headless screencasts have no mouse pointer; draw one so viewers can follow the clicks.
+// It lives in the top layer so dropdown flyouts don't cover it.
+async function showPointer(page) {
+  await page.evaluate(() => {
+    const pointer = document.createElement("div");
+    pointer.popover = "manual";
+    pointer.style.cssText =
+      "inset:auto;margin:0;padding:0;border:0;background:none;overflow:visible;pointer-events:none;width:20px;height:24px;left:-40px;top:-40px;position:fixed";
+    pointer.innerHTML =
+      '<svg width="20" height="24" viewBox="0 0 20 24"><path d="M2 2v18l5-5 3.5 7 3-1.5L10 13.5h7z" fill="#f0e6d2" stroke="#010a13" stroke-width="1.5" stroke-linejoin="round"/></svg>';
+    document.body.append(pointer);
+    const raise = () => {
+      pointer.hidePopover();
+      pointer.showPopover();
+    };
+    pointer.showPopover();
+    document.addEventListener("mousemove", (event) => {
+      pointer.style.left = `${event.clientX - 2}px`;
+      pointer.style.top = `${event.clientY - 2}px`;
+    }, true);
+    document.addEventListener("click", () => setTimeout(raise, 0), true);
+  });
+  await page.mouse.move(700, 560);
+}
+
+async function clickAt(page, selector, { steps = 18, dwell = 350 } = {}) {
+  const box = await (await page.waitForSelector(selector, { visible: true })).boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps });
+  await sleep(dwell);
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+}
 
 // Animated screens: scene -> scripted interaction while recording.
 const CLIPS = {
-  overview: async (page) => {
-    await sleep(2600);
-    const card = await page.$("#accounts > .card:nth-child(3)");
-    const box = await card.boundingBox();
-    await page.mouse.move(box.x + 60, box.y + 40, { steps: 12 });
-    await sleep(900);
-    await page.mouse.move(box.x + box.width - 40, box.y + 120, { steps: 16 });
+  // The README hero: find a duo partner's elo, log in with one click, glance at TFT ranks.
+  demo: async (page) => {
+    await showPointer(page);
+    await sleep(1400);
+    await clickAt(page, "#friend-tier + .framed-dropdown .framed-dropdown-current");
     await sleep(700);
-    await page.click('.mode-btn[data-mode="tft"]');
-    await sleep(2400);
-    await page.click('.mode-btn[data-mode="lol"]');
-    await sleep(2200);
-  },
-  login: async () => {
-    await sleep(9000);
+    const gold = await page.$$eval("#friend-tier option", (options) => options.findIndex((option) => option.value === "Gold"));
+    await clickAt(page, `#friend-tier + .framed-dropdown .framed-dropdown-option[data-index="${gold}"]`, { steps: 14 });
+    await sleep(2000);
+    await clickAt(page, "#accounts > .card:first-child .btn-play", { steps: 24, dwell: 500 });
+    await page.waitForSelector('.login-overlay [data-login="close"]', { visible: true, timeout: 20000 });
+    await sleep(1600);
+    await clickAt(page, '.login-overlay [data-login="close"]');
+    await page.waitForSelector(".login-overlay", { hidden: true });
+    await sleep(600);
+    await clickAt(page, '.mode-btn[data-mode="tft"]', { steps: 24 });
+    await sleep(2600);
   },
 };
 
@@ -65,7 +99,6 @@ try {
     const page = await demoPage(browser, base);
     const recorder = await page.screencast({ path: `${OUT}/.tmp/${scene}.webm` });
     try {
-      if (scene === "login") await page.click('#accounts > .card:nth-child(3) .btn-play');
       await act(page);
     } finally {
       await recorder.stop();
