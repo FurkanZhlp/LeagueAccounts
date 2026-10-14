@@ -100,7 +100,21 @@ export interface UpdateStatus {
 
 export type LoginResult = "signedIn" | "typed" | "alreadySignedIn";
 
+export interface RankProvenance {
+  source: string;
+  fetchedAt: number | null;
+  sourceUpdatedAt: number | null;
+  freshness: "fresh" | "stale" | "unknown";
+  /** Set by the backend from its single age threshold. */
+  freshUntil: number | null;
+  renewalAttempted: boolean;
+  renewalSucceeded: boolean;
+  error: "profile_not_found" | "rate_limited" | "provider_unavailable" | "parsing_failed" | "forbidden" | "timeout" | "renewal_failed" | null;
+}
+
 export interface AccountView {
+  rankProvenance?: RankProvenance | null;
+  tftProvenance?: RankProvenance | null;
   accountId: string;
   name: string;
   riotIdNotFound: boolean;
@@ -207,7 +221,7 @@ export const api = {
   updateAccount: (key: Key, name: string, description: string) =>
     call<AccountView>("update_account", { key, name, description }),
   deleteAccount: (key: Key) => call<void>("delete_account", { key }),
-  refreshRanks: () => call<number>("refresh_ranks"),
+  refreshRanks: (force = false) => call<number>("refresh_ranks", { force }),
   copyAccountId: (key: Key) => call<void>("copy_account_id", { key }),
   copyPassword: (key: Key) => call<number>("copy_password", { key }),
   login: (key: Key, tft: boolean, closeRunning: boolean) =>

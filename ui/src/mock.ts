@@ -89,6 +89,17 @@ export function installMock(): void {
     else setUpdate({ phase: "upToDate", release: { ...release, version: "3.0.3" } });
   }, scene === "restart" ? 1500 : 300);
   let accounts = structuredClone(sample);
+  if (scene === "freshness") {
+    const errors: NonNullable<AccountView["rankProvenance"]>["error"][] = [null, "rate_limited", "forbidden", "parsing_failed", "timeout", "provider_unavailable", "renewal_failed"];
+    accounts.forEach((account, index) => {
+      account.rankProvenance = {
+        source: "OP.GG", fetchedAt: Date.now(), sourceUpdatedAt: Date.now() - (index ? 3_600_000 : 0),
+        freshness: index ? "stale" : "fresh", freshUntil: index ? null : Date.now() + 15 * 60_000, renewalAttempted: Boolean(index), renewalSucceeded: !index,
+        error: errors[index % errors.length],
+      };
+      account.tftProvenance = { ...account.rankProvenance, freshness: "unknown", freshUntil: null, sourceUpdatedAt: null, renewalAttempted: false, renewalSucceeded: false, error: null };
+    });
+  }
   const find = (key: Key) => accounts.find((account) => keyId(account) === keyId(key));
   const fakeFetch = (targets: AccountView[], exclusive = false) => {
     listeners.pending.forEach((handler) => handler(targets.map((account) => ({ accountId: account.accountId, region: account.region }))));

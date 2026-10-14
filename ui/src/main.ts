@@ -4,7 +4,7 @@ import "./login.css";
 import "./league.css";
 import "./client-controls.css";
 
-import { ApiError, accountLabel, api, events, keyId, keyOf, parseAccountLine, type AccountView, type Key, type Schedule, type Settings } from "./api";
+import { ApiError, accountLabel, api, events, keyId, keyOf, parseAccountLine, type AccountView, type Key, type RankProvenance, type Schedule, type Settings } from "./api";
 import { openLoginOverlay, type LoginOverlay } from "./login";
 import { LANGUAGES, applyStatic, errorText, lang, localizeRank, setLang, t, tierName, type Lang, type MessageKey } from "./i18n";
 import { $, closeMenu, contextMenu, esc, fragment, leave, modal, reducedMotion, toast } from "./dom";
@@ -120,8 +120,30 @@ function historyLine(account: AccountView): string {
   return `<span>${t("card.lastSeason")}</span><b>${esc(localizeRank(reached))}</b>`;
 }
 
+function provenanceOf(account: AccountView): RankProvenance | null | undefined {
+  return state.mode === "tft" ? account.tftProvenance : account.rankProvenance;
+}
+
+// A saved "fresh" state must age while the application is open or closed.
+function isFresh(data: RankProvenance | null | undefined): boolean {
+  return data?.freshness === "fresh" && data.freshUntil != null && Date.now() < data.freshUntil;
+}
+
 function cardSignature(account: AccountView, pending: boolean): string {
-  return JSON.stringify([account, state.mode, pending, lang()]);
+  return JSON.stringify([account, state.mode, pending, lang(), isFresh(provenanceOf(account))]);
+}
+
+function provenanceLine(account: AccountView): string {
+  const data = provenanceOf(account);
+  if (!data || !account.name || account.riotIdNotFound) return "";
+  const at = data.sourceUpdatedAt;
+  const fresh = isFresh(data);
+  const error = data.error ? t(`freshness.${data.error}`) : "";
+  const label = fresh && !error
+    ? t("freshness.updated", { time: new Date(at!).toLocaleTimeString(lang(), { hour: "2-digit", minute: "2-digit" }) })
+    : t(data.freshness === "unknown" && !error ? "freshness.unknown" : "freshness.stale");
+  const detail = [at != null ? new Date(at).toLocaleString(lang()) : t("freshness.unknown"), error].filter(Boolean).join(" · ");
+  return `<div class="rank-provenance${error ? " has-error" : ""}" data-tooltip="${esc(detail)}">${esc(label)} · ${esc(data.source)}${error ? ` · ${esc(error)}` : ""}</div>`;
 }
 
 function cardInner(account: AccountView, pending: boolean): string {
@@ -155,7 +177,7 @@ function cardInner(account: AccountView, pending: boolean): string {
       `}
       </div>
     </div>
-    ${account.name && !account.riotIdNotFound ? `<div class="history">${historyLine(account)}</div>` : ""}
+    ${account.name && !account.riotIdNotFound ? `<div class="history">${historyLine(account)}${provenanceLine(account)}</div>` : ""}
     ${account.description ? `<p class="desc" data-tooltip="${esc(account.description)}">${esc(account.description)}</p>` : `<p class="desc desc-empty"></p>`}
     <div class="card-actions">
       <button class="btn btn-play" data-act="login" data-tooltip="${esc(t("card.loginTitle"))}">${icon("login", 15)}${esc(t("card.login"))}</button>
@@ -481,13 +503,13 @@ function openMenu(account: AccountView, x: number, y: number): void {
   ]);
 }
 
-async function refreshAll(): Promise<void> {
+async function refreshAll(force = false): Promise<void> {
   if (state.refreshing || state.schedule?.running) return;
   state.refreshing = true;
   state.refreshTotal = 0;
   state.refreshDone = 0;
   renderSchedule();
-  const count = await guard(() => api.refreshRanks(), "toast.refreshFailed");
+  const count = await guard(() => api.refreshRanks(force), "toast.refreshFailed");
   if (count === undefined) {
     state.refreshing = false;
     renderSchedule();
@@ -873,6 +895,7 @@ function showShortcuts(): void {
     ["Ctrl + F", t("sc.search")],
     ["Ctrl + N", t("sc.add")],
     ["Ctrl + R / F5", t("sc.refresh")],
+    ["Ctrl + Shift + R / Shift + F5", t("sc.forceRefresh")],
     ["Ctrl + 1 / 2", t("sc.mode")],
     ["Ctrl + ,", t("sc.settings")],
     [t("sc.dblclick"), t("sc.dblclickText")],
@@ -1075,7 +1098,7 @@ function onKeyDown(event: KeyboardEvent): void {
 
   if ((ctrl && key === "r") || event.key === "F5") {
     event.preventDefault();
-    if (!overlayOpen) void refreshAll();
+    if (!overlayOpen) void refreshAll(event.shiftKey);
     return;
   }
   if (overlayOpen) return;
@@ -1249,6 +1272,8 @@ async function start(): Promise<void> {
   await Promise.all([wireEvents(), wireUpdates({ busy: uiBusy }), IN_TAURI ? wireWindow() : Promise.resolve()]);
   renderSchedule();
   setInterval(renderSchedule, 1000);
+  // Cards only rebuild when their signature changes, e.g. "Updated" turning stale.
+  setInterval(renderAccounts, 30_000);
   // An update found at launch shows the update screen instead of the app.
   if (!(await launchUpdate(revealApp))) await revealApp();
   if (!IN_TAURI && import.meta.env.DEV) runDemoScene();

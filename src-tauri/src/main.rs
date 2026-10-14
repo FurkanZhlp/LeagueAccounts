@@ -293,13 +293,14 @@ fn delete_account(state: AppState<'_>, key: Key) -> CommandResult<()> {
 }
 
 #[tauri::command]
-fn refresh_ranks(app: AppHandle, state: AppState<'_>) -> CommandResult<usize> {
+fn refresh_ranks(app: AppHandle, state: AppState<'_>, force: Option<bool>) -> CommandResult<usize> {
     let accounts = manager(&state)?.accounts.clone();
     if accounts.is_empty() {
         return Err(fail("no_accounts"));
     }
     let count = accounts.len();
-    if !start_refresh(app, Arc::clone(&state), accounts, RefreshKind::Manual) {
+    let kind = if force.unwrap_or(false) { RefreshKind::Force } else { RefreshKind::Manual };
+    if !start_refresh(app, Arc::clone(&state), accounts, kind) {
         return Err(fail("refresh_running"));
     }
     Ok(count)
