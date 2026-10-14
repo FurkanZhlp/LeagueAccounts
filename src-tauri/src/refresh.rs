@@ -6,6 +6,7 @@ use crate::updater::Updater;
 use crate::views::{account_view, fail, fail_with, AppError, Key};
 use leagueaccounts::logging::{self, Event, Reason};
 use leagueaccounts::models::{Account, RankInfo};
+use leagueaccounts::rank_fetcher::RefreshMode;
 use leagueaccounts::utils::sort_accounts;
 use leagueaccounts::AccountManager;
 use serde::{Deserialize, Serialize};
@@ -139,6 +140,8 @@ pub fn schedule(shared: &Shared) -> Schedule {
 pub enum RefreshKind {
     /// Full refresh requested from the UI.
     Manual,
+    /// Explicit user request; still respects provider cooldowns.
+    Force,
     /// Full refresh started by the scheduler.
     Auto,
     /// A few accounts after adding or renaming them.
@@ -211,7 +214,11 @@ pub fn start_refresh(app: AppHandle, shared: Arc<Shared>, accounts: Vec<Account>
                     let job = queue.lock().ok().and_then(|mut queue| queue.pop_front());
                     let Some(account) = job else { break };
                     let info = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        provider.fetch_rank(&account)
+                        provider.fetch_rank_with_mode(&account, match kind {
+                            RefreshKind::Auto => RefreshMode::Auto,
+                            RefreshKind::Force => RefreshMode::Force,
+                            _ => RefreshMode::Manual,
+                        })
                     }))
                     .unwrap_or_else(|_| {
                         logging::record(Event::RankWorkerPanicked, Reason::None);
