@@ -1,15 +1,27 @@
 // Capture README screenshots and GIFs from the real UI with synthetic data.
 //
-// Usage: `npm run screenshots`, or `npm run screenshots -- login` for one scene.
+// Usage: `npm run screenshots`, or `npm run screenshots -- demo` for one scene.
 // Starts an isolated dev server automatically.
 // Requires Chrome and ffmpeg on PATH (GIFs are converted from screencasts).
 import { execFileSync } from "node:child_process";
-import { mkdirSync, renameSync, rmSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
 import { demoBrowser, demoPage } from "./demo-browser.mjs";
 
 const OUT = resolve("docs/screenshots");
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const { version } = JSON.parse(readFileSync("package.json", "utf8"));
+
+// The README shows the app, not the preview: hide the DEV DATA badge and Reset demo,
+// and show the release version instead of the mock's.
+async function capturePage(browser, base, scene) {
+  const page = await demoPage(browser, base, scene);
+  await page.evaluate((version) => {
+    document.getElementById("dev-tools").hidden = true;
+    document.getElementById("version").textContent = `v${version}`;
+  }, version);
+  return page;
+}
 
 // Static screens: scene -> wait for animations to settle.
 const STILLS = { tft: 1000, list: 1000, settings: 1000, add: 1000, menu: 1000 };
@@ -87,7 +99,7 @@ const { browser, base } = demo;
 try {
   for (const [scene, wait] of Object.entries(STILLS)) {
     if (requested.size && !requested.has(scene)) continue;
-    const page = await demoPage(browser, base, scene);
+    const page = await capturePage(browser, base, scene);
     await sleep(wait);
     await page.screenshot({ path: `${OUT}/.tmp/${scene}.png` });
     renameSync(`${OUT}/.tmp/${scene}.png`, `${OUT}/${scene}.png`);
@@ -96,7 +108,7 @@ try {
   }
   for (const [scene, act] of Object.entries(CLIPS)) {
     if (requested.size && !requested.has(scene)) continue;
-    const page = await demoPage(browser, base);
+    const page = await capturePage(browser, base);
     const recorder = await page.screencast({ path: `${OUT}/.tmp/${scene}.webm` });
     try {
       await act(page);
