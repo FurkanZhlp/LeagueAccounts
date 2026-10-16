@@ -121,6 +121,9 @@ button:focus-visible, a:focus-visible { color: #f0e6d2; }
 .chip-region { color: #a6b3b7; padding: 1px 5px; border: 1px solid #4c5a60; }
 .chip-level { color: #93a3ab; }
 .chip-level b { color: #d6cdb9; font-weight: 600; margin-left: 2px; }
+.chip-ban { display: inline-flex; align-items: center; gap: 3px; color: #e8a49b; padding: 1px 5px; border: 1px solid #8f3a33; background: #c2433a1a; }
+.chip-ban .icon { --icon-size: 11px; color: #e06d62; }
+.card.banned .emblem-wrap { filter: grayscale(.85) brightness(.75); }
 .acc-id { color: #738891; font-size: 10px; margin-left: auto; }
 .acc-id .icon { display: none; }
 .card-more { margin: -6px -9px 0 0; width: 25px; height: 28px; opacity: .65; color: #9eacb1; }

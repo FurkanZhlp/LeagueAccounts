@@ -35,6 +35,7 @@ const sample: AccountView[] = [
   hasPassword: true,
   lol: lolRank as AccountView["lol"],
   tft: tftRank as AccountView["tft"],
+  ban: accountId === "smurfy_tr" ? { until: Date.now() + (6 * 24 + 13) * 3_600_000 } : null,
 }));
 
 type Handler<T> = (payload: T) => void;
@@ -127,9 +128,11 @@ export function installMock(): void {
     }),
     getSettings: async () => settings,
     updateSettings: async (input: object) => Object.assign(settings, input),
-    login: async () => {
+    login: async (key: Key) => {
+      const ban = accounts.find((account) => keyId(account) === keyId(key))?.ban;
       const steps: LoginStep[] = ["openClient", "waitAuth", "connect", "findWindow", "type", "confirm", "launchGame", "done"];
       for (const step of steps) {
+        if (ban && step === "launchGame") throw new ApiError("account_banned", ban.until == null ? "" : String(ban.until));
         listeners.step.forEach((handler) => handler(step));
         await wait(step === "waitAuth" || step === "confirm" ? 1400 : 700);
       }
@@ -220,5 +223,6 @@ export function installMock(): void {
     onRankPending: async (handler: Handler<Key[]>) => (listeners.pending.push(handler), unlisten()),
     onRankUpdate: async (handler: Handler<AccountView>) => (listeners.update.push(handler), unlisten()),
     onRefreshDone: async (handler: Handler<RefreshDone>) => (listeners.done.push(handler), unlisten()),
+    onAccountUpdate: async () => unlisten(),
   } satisfies typeof events);
 }

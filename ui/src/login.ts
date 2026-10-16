@@ -28,7 +28,7 @@ export interface LoginOverlay {
   step(step: LoginStep): void;
   succeed(title: string, detail: string): void;
   finishInClient(): void;
-  fail(message: string): void;
+  fail(message: string, title?: string): void;
   close(): void;
 }
 
@@ -171,12 +171,12 @@ export function openLoginOverlay(options: {
       $(".login-title", overlay).textContent = t("login.finishTitle");
       finish("info", t("toast.finishSignIn"));
     },
-    fail(message) {
+    fail(message, title = t("login.failed")) {
       steps.forEach((step) => {
         if (states.get(step) === "active") states.set(step, "error");
       });
       render();
-      $(".login-title", overlay).textContent = t("login.failed");
+      $(".login-title", overlay).textContent = title;
       finish("error", message);
     },
     close() {

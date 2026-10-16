@@ -4,7 +4,7 @@ import "./login.css";
 import "./league.css";
 import "./client-controls.css";
 
-import { ApiError, accountLabel, api, events, keyId, keyOf, parseAccountLine, type AccountView, type Key, type RankProvenance, type Schedule, type Settings } from "./api";
+import { ApiError, accountLabel, api, events, keyId, keyOf, parseAccountLine, type AccountView, type Ban, type Key, type RankProvenance, type Schedule, type Settings } from "./api";
 import { openLoginOverlay, type LoginOverlay } from "./login";
 import { LANGUAGES, applyStatic, errorText, lang, localizeRank, setLang, t, tierName, type Lang, type MessageKey } from "./i18n";
 import { $, closeMenu, contextMenu, esc, fragment, leave, modal, reducedMotion, toast } from "./dom";
@@ -130,7 +130,33 @@ function isFresh(data: RankProvenance | null | undefined): boolean {
 }
 
 function cardSignature(account: AccountView, pending: boolean): string {
-  return JSON.stringify([account, state.mode, pending, lang(), isFresh(provenanceOf(account))]);
+  return JSON.stringify([account, state.mode, pending, lang(), isFresh(provenanceOf(account)), banChip(account)]);
+}
+
+/** The suspension still in force; a timed one disappears once it ends. */
+function activeBan(account: AccountView): Ban | null {
+  const ban = account.ban;
+  return ban && (ban.until == null || ban.until > Date.now()) ? ban : null;
+}
+
+function banRemaining(until: number): string {
+  const minutes = Math.max(1, Math.ceil((until - Date.now()) / 60_000));
+  const days = Math.floor(minutes / 1440);
+  const hours = Math.floor((minutes % 1440) / 60);
+  if (days) return t("ban.days", { d: days, h: hours });
+  if (hours) return t("ban.hours", { h: hours, m: minutes % 60 });
+  return t("ban.minutes", { m: minutes });
+}
+
+const banEnd = (until: number): string =>
+  new Date(until).toLocaleString(lang(), { dateStyle: "medium", timeStyle: "short" });
+
+function banChip(account: AccountView): string {
+  const ban = activeBan(account);
+  if (!ban) return "";
+  const label = ban.until == null ? t("ban.permanent") : t("ban.chip", { time: banRemaining(ban.until) });
+  const detail = ban.until == null ? t("ban.permanent") : t("ban.until", { date: banEnd(ban.until) });
+  return `<span class="chip chip-ban" data-tooltip="${esc(detail)}">${icon("alert", 11)}${esc(label)}</span>`;
 }
 
 function provenanceLine(account: AccountView): string {
@@ -160,6 +186,7 @@ function cardInner(account: AccountView, pending: boolean): string {
         <div class="meta">
           <span class="chip chip-region">${esc(account.regionDisplay)}</span>
           ${account.level ? `<span class="chip chip-level">${esc(t("card.level"))} <b>${esc(account.level)}</b></span>` : ""}
+          ${banChip(account)}
           <span class="acc-id" data-tooltip="${esc(t("card.accountId"))}">${icon("users", 12)}${esc(account.accountId)}</span>
         </div>
       </div>
@@ -195,6 +222,7 @@ function updateCard(element: HTMLElement, account: AccountView): void {
   element.style.setProperty("--tier-light", colors.light);
   element.style.setProperty("--tier-dark", colors.dark);
   element.classList.toggle("selected", state.selected === id);
+  element.classList.toggle("banned", activeBan(account) !== null);
   element.classList.toggle("apex", APEX.has(normalizeTier(rankOf(account, state.mode).tier)));
   if (element.dataset.signature === signature) return;
   const wasPending = element.dataset.pending === "1";
@@ -367,10 +395,29 @@ async function confirmCloseLeague(account: AccountView, inGame: boolean): Promis
   return answer === "close";
 }
 
+/** Ask before signing in to an account Riot reported as banned. */
+async function confirmBannedLogin(account: AccountView, ban: Ban): Promise<boolean> {
+  const name = accountLabel(account);
+  const text = ban.until == null
+    ? t("ban.permanentText", { name })
+    : t("ban.text", { name, date: banEnd(ban.until), time: banRemaining(ban.until) });
+  const answer = await modal({
+    title: t("ban.title"),
+    body: `<div class="warning danger">${icon("alert", 18)}<p>${esc(text)}</p></div>`,
+    actions: [
+      { label: t("common.cancel"), value: "cancel" },
+      { label: t("ban.confirm"), value: "login", kind: "danger" },
+    ],
+  });
+  return answer === "login";
+}
+
 async function login(account: AccountView): Promise<void> {
   if (loginBusy) return;
   loginBusy = true;
   try {
+    const ban = activeBan(account);
+    if (ban && !(await confirmBannedLogin(account, ban))) return;
     await runLogin(account);
   } finally {
     loginBusy = false;
@@ -405,9 +452,9 @@ async function runLogin(account: AccountView, closeRunning = false): Promise<voi
   try {
     const result = await api.login(key, state.mode === "tft", closeRunning);
     if (result === "signedIn") {
-      overlay.succeed(t("login.success"), launching ? t("toast.launchingGame") : accountLabel(account));
+      overlay.succeed(t("login.success"), launching ? t("toast.gameLaunched") : accountLabel(account));
     } else if (result === "alreadySignedIn") {
-      overlay.succeed(t("toast.alreadySignedIn"), launching ? t("toast.launchingGame") : accountLabel(account));
+      overlay.succeed(t("toast.alreadySignedIn"), launching ? t("toast.gameLaunched") : accountLabel(account));
     } else if (result === "typed") {
       if (viaRiot) overlay.finishInClient();
       else overlay.succeed(t("toast.loggedIn"), accountLabel(account));
@@ -415,6 +462,13 @@ async function runLogin(account: AccountView, closeRunning = false): Promise<voi
   } catch (error) {
     if (error instanceof ApiError && error.code === "login_cancelled") {
       overlay.close();
+    } else if (error instanceof ApiError && error.code === "account_banned") {
+      // Riot reported the ban after sign-in; the game was not started.
+      const until = Number(error.detail) || null;
+      overlay.fail(
+        until == null ? t("ban.stoppedPermanent") : t("ban.stopped", { date: banEnd(until), time: banRemaining(until) }),
+        t("ban.title"),
+      );
     } else if (error instanceof ApiError && error.code === "league_running") {
       // The client was opened between the check and the login: ask again.
       overlay.close();
@@ -1199,6 +1253,10 @@ async function wireEvents(): Promise<void> {
     renderAccounts();
     renderDistribution();
     renderSchedule();
+  });
+  await events.onAccountUpdate((account) => {
+    upsert(account);
+    renderAccounts();
   });
   await events.onRefreshDone(({ error, exclusive }) => {
     if (error) toast("error", t("toast.ranksSaveFailed"), describe(new ApiError(error.code, error.detail)), 5000);

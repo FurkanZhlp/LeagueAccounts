@@ -407,6 +407,7 @@ async fn login(
     let password = password_for(&account);
     let settings = state.settings.lock().map(|s| s.clone()).unwrap_or_default();
     let shared = Arc::clone(&state);
+    let (events, account_key) = (app.clone(), account.key());
     let result = tauri::async_runtime::spawn_blocking(move || {
         // Acquired before queueing; released only after native renderer cleanup.
         let _guard = guard;
@@ -454,13 +455,47 @@ async fn login(
     .await
     .unwrap_or(Err(LoginError::WorkerPanicked));
     riot_client::record_login_result(&result);
+    remember_ban(&events, &state, &account_key, &result);
     result
         .map(|outcome| match outcome {
             LoginOutcome::SignedIn => LoginResult::SignedIn,
             LoginOutcome::Typed => LoginResult::Typed,
             LoginOutcome::AlreadySignedIn => LoginResult::AlreadySignedIn,
         })
-        .map_err(|error| fail(error.code()))
+        .map_err(|error| match error {
+            // The detail carries the end time (Unix ms), empty when permanent.
+            LoginError::Banned(ban) => fail_with(
+                error.code(),
+                ban.until.map(|until| until.to_string()).unwrap_or_default(),
+            ),
+            _ => fail(error.code()),
+        })
+}
+
+/// Keep the suspension Riot reported, or clear it once a Riot sign-in gets
+/// through the check. Typed logins never reach Riot's account information.
+fn remember_ban(
+    app: &AppHandle,
+    state: &Shared,
+    key: &AccountKey,
+    result: &Result<LoginOutcome, LoginError>,
+) {
+    let ban = match result {
+        Err(LoginError::Banned(ban)) => Some(*ban),
+        Ok(LoginOutcome::SignedIn | LoginOutcome::AlreadySignedIn) => None,
+        _ => return,
+    };
+    let Ok(mut manager) = manager(state) else { return };
+    let Some(stored) = manager.account_mut(key) else { return };
+    if stored.ban == ban {
+        return;
+    }
+    stored.ban = ban;
+    let view = account_view(stored);
+    // A failed save is logged by the manager; the next save retries it.
+    let _ = manager.save_accounts();
+    drop(manager);
+    let _ = app.emit("account-update", view);
 }
 
 #[derive(Serialize)]

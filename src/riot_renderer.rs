@@ -297,8 +297,8 @@ impl Renderer {
 
 impl Drop for Renderer {
     fn drop(&mut self) {
-        // Covers renderer setup, MFA, cancellation, unwinding and failed game
-        // launches. Successful paths restore first or are replaced by the game.
+        // Covers renderer setup, MFA, cancellation, unwinding, suspended
+        // accounts and failed game launches. Successful paths restore first or are replaced by the game.
         if self.restore().is_err() {
             logging::record(Event::LoginFailed, Reason::RendererFailed);
         }

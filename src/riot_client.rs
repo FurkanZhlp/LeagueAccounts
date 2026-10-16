@@ -5,11 +5,12 @@
 mod renderer;
 
 use crate::logging::{self, Event, Reason};
+use crate::models::Ban;
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 /// Allow cold starts and client updates without relaxing login readiness.
 const LOGIN_TIMEOUT: Duration = Duration::from_secs(120);
@@ -118,6 +119,8 @@ pub enum LoginError {
     GameLaunchFailed,
     /// Riot or League reports a different account during launch.
     AccountMismatch,
+    /// Riot reports a League suspension; the game would disconnect at once.
+    Banned(Ban),
     WorkerPanicked,
 }
 
@@ -138,6 +141,7 @@ impl LoginError {
             LoginError::CloseFailed => "league_close_failed",
             LoginError::GameLaunchFailed => "game_launch_failed",
             LoginError::AccountMismatch => "game_account_mismatch",
+            LoginError::Banned(_) => "account_banned",
             LoginError::WorkerPanicked => "autotype_failed",
         }
     }
@@ -175,6 +179,7 @@ pub fn record_login_result(result: &Result<LoginOutcome, LoginError>) {
                 LoginError::CloseFailed => Reason::CloseFailed,
                 LoginError::GameLaunchFailed => Reason::GameLaunchFailed,
                 LoginError::AccountMismatch => Reason::AccountMismatch,
+                LoginError::Banned(_) => Reason::AccountBanned,
                 LoginError::WorkerPanicked => Reason::WorkerPanicked,
             },
         ),
@@ -424,18 +429,22 @@ impl LocalApi {
             .is_ok_and(|response| response.status().is_success())
     }
 
-    /// Username of the signed-in account, if any.
-    fn username(&self) -> Option<String> {
+    /// Riot account information of the signed-in account.
+    fn userinfo(&self) -> Option<serde_json::Value> {
         let (status, body) = self.get("/rso-auth/v1/authorization/userinfo")?;
         if status != 200 {
             return None;
         }
         // `userInfo` is itself a JSON document encoded as a string.
-        let info: serde_json::Value = match &body["userInfo"] {
-            serde_json::Value::String(text) => serde_json::from_str(text).ok()?,
-            other => other.clone(),
-        };
-        info["username"]
+        match &body["userInfo"] {
+            serde_json::Value::String(text) => serde_json::from_str(text).ok(),
+            other => Some(other.clone()),
+        }
+    }
+
+    /// Username of the signed-in account, if any.
+    fn username(&self) -> Option<String> {
+        self.userinfo()?["username"]
             .as_str()
             .filter(|name| !name.is_empty())
             .map(str::to_owned)
@@ -473,6 +482,52 @@ impl LocalApi {
         } else {
             Err(LoginError::SignOutFailed)
         }
+    }
+}
+
+/// The League suspension in Riot's userinfo `ban.restrictions`, if any.
+/// Chat, ranked and reputation restrictions still allow playing.
+fn league_ban(info: &serde_json::Value, now_millis: u64) -> Option<Ban> {
+    let mut ban: Option<Ban> = None;
+    for restriction in info["ban"]["restrictions"].as_array()? {
+        if restriction["scope"] != "lol" {
+            continue;
+        }
+        let until = match restriction["type"].as_str() {
+            Some("PERMANENT_BAN") => None,
+            Some("TIME_BAN") => match restriction["dat"]["expirationMillis"].as_u64() {
+                Some(until) if until > now_millis => Some(until),
+                _ => continue,
+            },
+            _ => continue,
+        };
+        // A permanent ban outlasts any timed one; otherwise the latest end wins.
+        ban = Some(Ban {
+            until: match (ban, until) {
+                (Some(Ban { until: None }), _) | (_, None) => None,
+                (Some(Ban { until: Some(other) }), Some(until)) => Some(other.max(until)),
+                (None, until) => until,
+            },
+        });
+    }
+    ban
+}
+
+fn now_millis() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |elapsed| elapsed.as_millis() as u64)
+}
+
+/// Stop before the game starts: Riot disconnects a suspended account at once.
+/// An unreadable userinfo does not block the login.
+fn check_ban() -> Result<(), LoginError> {
+    match LocalApi::read()
+        .and_then(|api| api.userinfo())
+        .and_then(|info| league_ban(&info, now_millis()))
+    {
+        Some(ban) => Err(LoginError::Banned(ban)),
+        None => Ok(()),
     }
 }
 
@@ -692,6 +747,7 @@ pub fn login(
                     Some(name) if name.eq_ignore_ascii_case(account_id) => {
                         client.restore()?;
                         check_cancelled(cancel)?;
+                        check_ban()?;
                         if let Some(game) = game {
                             progress(LoginStep::LaunchGame);
                             start_game(game, account_id, cancel)?;
@@ -730,6 +786,8 @@ pub fn login(
         thread::sleep(POLL);
     }
     renderer::sign_in(&mut client, account_id, password, progress, cancel)?;
+    // Dropping `client` on a ban reopens the normal Riot window.
+    check_ban()?;
     if let Some(game) = game {
         // The game replaces the Riot window, so do not reopen it in between.
         // If the launch fails or is cancelled, dropping `client` reopens it.
@@ -934,6 +992,54 @@ mod tests {
                 .to_ascii_lowercase()
         );
         assert_eq!(windows::process_path(current.pid), Some(executable));
+    }
+
+    #[test]
+    fn only_current_league_suspensions_count_as_bans() {
+        use serde_json::json;
+
+        let restriction = |kind: &str, scope: &str, until: u64| {
+            json!({
+                "type": kind, "reason": "INAPPROPRIATE_TEXT", "scope": scope,
+                "dat": {"expirationMillis": until, "gameData": {"productName": scope}}
+            })
+        };
+        let info = |restrictions: Vec<serde_json::Value>| json!({"ban": {"restrictions": restrictions}});
+        let now = 1_000;
+
+        // Shape observed on a suspended account: chat limits sit beside the ban.
+        let observed = info(vec![
+            restriction("TEXT_CHAT_RESTRICTION", "lol", 9_000),
+            restriction("REPUTATION_LIMIT", "lol", 0),
+            restriction("TIME_BAN", "lol", 5_000),
+            restriction("TEXT_CHAT_MUTED", "lol", 0),
+        ]);
+        assert_eq!(league_ban(&observed, now), Some(Ban { until: Some(5_000) }));
+
+        assert_eq!(league_ban(&info(vec![]), now), None);
+        assert_eq!(league_ban(&json!({}), now), None);
+        assert_eq!(league_ban(&info(vec![restriction("TIME_BAN", "lol", 1_000)]), now), None);
+        assert_eq!(league_ban(&info(vec![restriction("TIME_BAN", "valorant", 5_000)]), now), None);
+        assert_eq!(
+            league_ban(
+                &info(vec![
+                    restriction("TIME_BAN", "lol", 5_000),
+                    restriction("TIME_BAN", "lol", 7_000),
+                ]),
+                now
+            ),
+            Some(Ban { until: Some(7_000) })
+        );
+        assert_eq!(
+            league_ban(
+                &info(vec![
+                    restriction("PERMANENT_BAN", "lol", 0),
+                    restriction("TIME_BAN", "lol", 7_000),
+                ]),
+                now
+            ),
+            Some(Ban { until: None })
+        );
     }
 
     #[test]

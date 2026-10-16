@@ -125,6 +125,12 @@ export interface AccountView {
   hasPassword: boolean;
   lol: LolRank;
   tft: TftRank;
+  /** League suspension reported at the last Riot sign-in; `until` is null when permanent. */
+  ban?: Ban | null;
+}
+
+export interface Ban {
+  until: number | null;
 }
 
 export const accountLabel = (account: AccountView): string => account.name || account.accountId;
@@ -257,4 +263,6 @@ export const events = {
     listen<AccountView>("rank-update", (event) => handler(event.payload)),
   onRefreshDone: (handler: (done: RefreshDone) => void): Promise<UnlistenFn> =>
     listen<RefreshDone>("refresh-done", (event) => handler(event.payload)),
+  onAccountUpdate: (handler: (account: AccountView) => void): Promise<UnlistenFn> =>
+    listen<AccountView>("account-update", (event) => handler(event.payload)),
 };
