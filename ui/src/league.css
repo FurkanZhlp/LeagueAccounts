@@ -93,7 +93,8 @@ button:focus-visible, a:focus-visible { color: #f0e6d2; }
 .search { min-width: 160px; }
 .search input { font-size: 13px; }
 .view-toggle { padding: 2px; }
-.view-toggle button { height: 30px; width: 28px; border-radius: 0; }
+/* Stretch to the 32px box's inner height; a fixed 30px overflowed it by 4px. */
+.view-toggle button { height: auto; width: 28px; border-radius: 0; }
 .view-toggle button.active { color: #dfc690; background: #c8aa6e19; }
 .btn { border-radius: 0; font-family: Beaufort, serif; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; font-size: 12px; }
 .btn-primary { color: #e6d4a9; border: 1px solid #a68b53; background: linear-gradient(180deg, #31332a, #171e20); box-shadow: inset 0 0 0 1px #050c14; }
