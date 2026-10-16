@@ -101,7 +101,7 @@
 /* Client settings rows: labels Spiegel 12px .1em grey, hints 10px 700 gold. */
 .toggle-text strong { font-size: 12px; font-weight: 400; letter-spacing: .1em; color: #a09b8c; }
 .toggle-row:hover .toggle-text strong, .radio-row:hover .toggle-text strong { color: #f0e6d2; }
-.toggle-text span { font-size: 10px; font-weight: 700; letter-spacing: .025em; color: #c89b3c; }
+.toggle-text span { font-size: 11px; font-weight: 400; letter-spacing: .025em; color: #7d786c; }
 .interval-presets button { border-radius: 0; }
 
 /* League's pointer marks selection; its gold navigation light brightens for

@@ -116,7 +116,8 @@ test("account collection, client frames and silent motion", { timeout: 180000 },
       }
     });
     await t.test("Settings frame contains scrolling content while its actions and close stay reachable", async () => {
-      await open("settings", { width: 980, height: 640 });
+      // Short enough that the two-column body still has to scroll.
+      await open("settings", { width: 980, height: 480 });
       await page.waitForSelector(".modal");
       assert.equal(await page.$eval(".modal-body", el => el.scrollHeight > el.clientHeight), true);
       const bounds = await page.$eval(".modal", el => {

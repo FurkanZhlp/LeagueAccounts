@@ -604,30 +604,14 @@ async function openSettings(): Promise<void> {
     title: t("settings.title"),
     wide: true,
     body: `
+      <div class="settings-grid">
+      <div class="settings-col">
       <section class="settings-section">
         <h3>${esc(t("settings.general"))}</h3>
         <label class="field inline"><span>${esc(t("settings.language"))}</span>
           <div class="select-wrap"><select name="language">${languageOptions}</select></div></label>
-        ${toggle("launchAtStartup", current.launchAtStartup, t("settings.startup"), t("settings.startupHint"))}
+        ${toggle("launchAtStartup", current.launchAtStartup, t("settings.startup"))}
         ${toggle("startMinimized", current.startMinimized, t("settings.minimized"), t("settings.minimizedHint"))}
-      </section>
-      <section class="settings-section">
-        <h3>${esc(t("settings.refresh"))}</h3>
-        ${toggle("autoRefresh", current.autoRefresh, t("settings.autoRefresh"))}
-        <div class="interval-row">
-          <span>${esc(t("settings.interval"))}</span>
-          <div class="interval-presets">${[5, 15, 30, 60, 120].map((value) => `<button type="button" data-interval="${value}">${value}</button>`).join("")}</div>
-          <label class="interval-input"><input name="intervalMinutes" type="number" min="5" max="1440" step="5" value="${current.intervalMinutes}"/><span>${esc(t("settings.minutes"))}</span></label>
-        </div>
-        <p class="hint">${esc(t("settings.intervalHint", { min: 5, max: 1440 }))}</p>
-      </section>
-      <section class="settings-section">
-        <h3>${esc(t("settings.login"))}</h3>
-        <label class="radio-row"><input type="radio" name="loginMethod" value="riot" ${current.loginMethod === "riot" ? "checked" : ""}/>
-          <span class="toggle-text"><strong>${esc(t("settings.methodRiot"))}</strong><span>${esc(current.riotClientFound ? t("settings.methodRiotHint") : t("settings.clientMissing"))}</span></span></label>
-        <label class="radio-row"><input type="radio" name="loginMethod" value="previous" ${current.loginMethod === "previous" ? "checked" : ""}/>
-          <span class="toggle-text"><strong>${esc(t("settings.methodPrevious"))}</strong><span>${esc(t("settings.methodPreviousHint"))}</span></span></label>
-        ${toggle("launchGame", current.launchGame, t("settings.launchGame"), t("settings.launchGameHint"))}
       </section>
       <section class="settings-section">
         <h3>${esc(t("settings.updates"))}</h3>
@@ -637,7 +621,28 @@ async function openSettings(): Promise<void> {
           <span class="update-result"></span>
           <button type="button" class="btn btn-ghost" data-check-update>${icon("refresh-cw", 14)}${esc(t("settings.checkNow"))}</button>
         </div>
-      </section>`,
+      </section>
+      </div>
+      <div class="settings-col">
+      <section class="settings-section">
+        <h3>${esc(t("settings.refresh"))}</h3>
+        ${toggle("autoRefresh", current.autoRefresh, t("settings.autoRefresh"))}
+        <div class="interval-row">
+          <span>${esc(t("settings.interval"))}</span>
+          <div class="interval-presets">${[5, 15, 30, 60, 120].map((value) => `<button type="button" data-interval="${value}">${value}</button>`).join("")}</div>
+          <label class="interval-input"><input name="intervalMinutes" type="number" min="5" max="1440" step="5" value="${current.intervalMinutes}"/><span>${esc(t("settings.minutes"))}</span></label>
+        </div>
+      </section>
+      <section class="settings-section">
+        <h3>${esc(t("settings.login"))}</h3>
+        <label class="radio-row"><input type="radio" name="loginMethod" value="riot" ${current.loginMethod === "riot" ? "checked" : ""}/>
+          <span class="toggle-text"><strong>${esc(t("settings.methodRiot"))}</strong><span>${esc(current.riotClientFound ? t("settings.methodRiotHint") : t("settings.clientMissing"))}</span></span></label>
+        <label class="radio-row"><input type="radio" name="loginMethod" value="previous" ${current.loginMethod === "previous" ? "checked" : ""}/>
+          <span class="toggle-text"><strong>${esc(t("settings.methodPrevious"))}</strong><span>${esc(t("settings.methodPreviousHint"))}</span></span></label>
+        ${toggle("launchGame", current.launchGame, t("settings.launchGame"), t("settings.launchGameHint"))}
+      </section>
+      </div>
+      </div>`,
     actions: [
       { label: t("common.cancel"), value: "cancel" },
       { label: t("common.save"), value: "save", kind: "primary" },

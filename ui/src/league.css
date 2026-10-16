@@ -232,11 +232,11 @@ button:focus-visible, a:focus-visible { color: #f0e6d2; }
 /* Client settings: section titles 14/18 700 caps; selects stacked under their label
    ("Window Size": 232px framed dropdown). */
 .settings-section h3 { font-family: Beaufort, serif; font-size: 14px; line-height: 18px; font-weight: 700; letter-spacing: .075em; text-transform: uppercase; color: #f0e6d2; }
-.settings-section .field.inline { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.settings-section .field.inline { display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0; }
 .settings-section .field.inline > span { font: 12px/16px Spiegel, sans-serif; letter-spacing: .025em; color: #a09b8c; }
-.settings-section .field.inline .select-wrap { width: 232px; height: 32px; }
+.settings-section .field.inline .select-wrap { width: 180px; height: 32px; }
 .interval-row > span { font-size: 12px; font-weight: 400; letter-spacing: .1em; color: #a09b8c; }
-.settings-section .hint { font-size: 10px; font-weight: 700; letter-spacing: .025em; color: #c89b3c; }
+.settings-section .hint { font-size: 11px; letter-spacing: .025em; color: #7d786c; }
 .menu { border-radius: 0; background: #0c1b25; border-color: #756440; box-shadow: 0 12px 35px #0008; }
 .menu-item { border-radius: 0; }
 .menu-item:hover { background: #c8aa6e14; }
