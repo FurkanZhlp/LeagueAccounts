@@ -1287,6 +1287,8 @@ function runDemoScene(): void {
     if (scene === "settings") void openSettings();
     if (scene === "add") openAddDrawer();
     if (scene === "login") void login(byName("Hextech"));
+    // The mock bans Kebab Enjoyer: logging in asks first, with the time left.
+    if (scene === "banned") void login(byName("Kebab"));
     if (scene === "update") showUpdateBanner({ version: "3.1.0", name: "v3.1.0", url: "", notes: "", publishedAt: "" }, true);
     if (scene === "menu") {
       const card = document.querySelector<HTMLElement>("#accounts > .card:nth-child(2)")!;
