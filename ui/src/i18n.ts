@@ -2,20 +2,12 @@
 // define the same keys (enforced by the `Dict` type).
 
 const en = {
-  "freshness.updated": "Updated {time}",
-  "freshness.stale": "Stale data",
-  "freshness.unknown": "Freshness unknown",
-  "freshness.profile_not_found": "Profile not found",
-  "freshness.rate_limited": "Rate limited",
-  "freshness.provider_unavailable": "Provider unavailable",
-  "freshness.parsing_failed": "Parsing failed",
-  "freshness.forbidden": "Access blocked",
-  "freshness.timeout": "Request timed out",
-  "freshness.renewal_failed": "Refresh failed",
 
   "mode.lol": "League of Legends",
   "mode.tft": "Teamfight Tactics",
   "win.minimize": "Minimize",
+  "win.maximize": "Maximize",
+  "win.restore": "Restore",
   "win.close": "Close",
 
   "side.add": "Add account",
@@ -310,20 +302,12 @@ type MessageKey = keyof typeof en;
 type Dict = Record<MessageKey, string>;
 
 const tr: Dict = {
-  "freshness.updated": "Güncellendi {time}",
-  "freshness.stale": "Eski veriler",
-  "freshness.unknown": "Güncellik bilinmiyor",
-  "freshness.profile_not_found": "Profil bulunamadı",
-  "freshness.rate_limited": "İstek sınırı",
-  "freshness.provider_unavailable": "Sağlayıcı kullanılamıyor",
-  "freshness.parsing_failed": "Veriler okunamadı",
-  "freshness.forbidden": "Erişim engellendi",
-  "freshness.timeout": "İstek zaman aşımı",
-  "freshness.renewal_failed": "Yenileme başarısız",
 
   "mode.lol": "League of Legends",
   "mode.tft": "Teamfight Tactics",
   "win.minimize": "Küçült",
+  "win.maximize": "Büyüt",
+  "win.restore": "Geri yükle",
   "win.close": "Kapat",
 
   "side.add": "Hesap ekle",
@@ -615,20 +599,12 @@ const tr: Dict = {
 };
 
 const de: Dict = {
-  "freshness.updated": "Aktualisiert {time}",
-  "freshness.stale": "Veraltete Daten",
-  "freshness.unknown": "Aktualität unbekannt",
-  "freshness.profile_not_found": "Profil nicht gefunden",
-  "freshness.rate_limited": "Anfragelimit erreicht",
-  "freshness.provider_unavailable": "Anbieter nicht verfügbar",
-  "freshness.parsing_failed": "Daten nicht lesbar",
-  "freshness.forbidden": "Zugriff blockiert",
-  "freshness.timeout": "Zeitüberschreitung",
-  "freshness.renewal_failed": "Aktualisierung fehlgeschlagen",
 
   "mode.lol": "League of Legends",
   "mode.tft": "Teamfight Tactics",
   "win.minimize": "Minimieren",
+  "win.maximize": "Maximieren",
+  "win.restore": "Wiederherstellen",
   "win.close": "Schließen",
 
   "side.add": "Konto hinzufügen",
@@ -920,20 +896,12 @@ const de: Dict = {
 };
 
 const es: Dict = {
-  "freshness.updated": "Actualizado {time}",
-  "freshness.stale": "Datos antiguos",
-  "freshness.unknown": "Actualidad desconocida",
-  "freshness.profile_not_found": "Perfil no encontrado",
-  "freshness.rate_limited": "Límite de solicitudes",
-  "freshness.provider_unavailable": "Proveedor no disponible",
-  "freshness.parsing_failed": "Error de análisis",
-  "freshness.forbidden": "Acceso bloqueado",
-  "freshness.timeout": "Tiempo de espera agotado",
-  "freshness.renewal_failed": "Error al actualizar",
 
   "mode.lol": "League of Legends",
   "mode.tft": "Teamfight Tactics",
   "win.minimize": "Minimizar",
+  "win.maximize": "Maximizar",
+  "win.restore": "Restaurar",
   "win.close": "Cerrar",
 
   "side.add": "Añadir cuenta",
@@ -1225,20 +1193,12 @@ const es: Dict = {
 };
 
 const fr: Dict = {
-  "freshness.updated": "Mis à jour {time}",
-  "freshness.stale": "Données anciennes",
-  "freshness.unknown": "Fraîcheur inconnue",
-  "freshness.profile_not_found": "Profil introuvable",
-  "freshness.rate_limited": "Limite de requêtes",
-  "freshness.provider_unavailable": "Service indisponible",
-  "freshness.parsing_failed": "Erreur de lecture",
-  "freshness.forbidden": "Accès bloqué",
-  "freshness.timeout": "Délai dépassé",
-  "freshness.renewal_failed": "Échec de mise à jour",
 
   "mode.lol": "League of Legends",
   "mode.tft": "Teamfight Tactics",
   "win.minimize": "Réduire",
+  "win.maximize": "Agrandir",
+  "win.restore": "Restaurer",
   "win.close": "Fermer",
 
   "side.add": "Ajouter un compte",
@@ -1530,20 +1490,12 @@ const fr: Dict = {
 };
 
 const pt: Dict = {
-  "freshness.updated": "Atualizado {time}",
-  "freshness.stale": "Dados antigos",
-  "freshness.unknown": "Atualidade desconhecida",
-  "freshness.profile_not_found": "Perfil não encontrado",
-  "freshness.rate_limited": "Limite de pedidos",
-  "freshness.provider_unavailable": "Serviço indisponível",
-  "freshness.parsing_failed": "Erro de leitura",
-  "freshness.forbidden": "Acesso bloqueado",
-  "freshness.timeout": "Tempo esgotado",
-  "freshness.renewal_failed": "Falha ao atualizar",
 
   "mode.lol": "League of Legends",
   "mode.tft": "Teamfight Tactics",
   "win.minimize": "Minimizar",
+  "win.maximize": "Maximizar",
+  "win.restore": "Restaurar",
   "win.close": "Fechar",
 
   "side.add": "Adicionar conta",

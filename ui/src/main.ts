@@ -4,7 +4,7 @@ import "./login.css";
 import "./league.css";
 import "./client-controls.css";
 
-import { ApiError, accountLabel, api, events, keyId, keyOf, parseAccountLine, type AccountView, type Ban, type Key, type RankProvenance, type Schedule, type Settings } from "./api";
+import { ApiError, accountLabel, api, events, keyId, keyOf, parseAccountLine, type AccountView, type Ban, type Key, type Schedule, type Settings } from "./api";
 import { openLoginOverlay, type LoginOverlay } from "./login";
 import { LANGUAGES, applyStatic, errorText, lang, localizeRank, setLang, t, tierName, type Lang, type MessageKey } from "./i18n";
 import { $, closeMenu, contextMenu, esc, fragment, leave, modal, reducedMotion, toast } from "./dom";
@@ -120,17 +120,8 @@ function historyLine(account: AccountView): string {
   return `<span>${t("card.lastSeason")}</span><b>${esc(localizeRank(reached))}</b>`;
 }
 
-function provenanceOf(account: AccountView): RankProvenance | null | undefined {
-  return state.mode === "tft" ? account.tftProvenance : account.rankProvenance;
-}
-
-// A saved "fresh" state must age while the application is open or closed.
-function isFresh(data: RankProvenance | null | undefined): boolean {
-  return data?.freshness === "fresh" && data.freshUntil != null && Date.now() < data.freshUntil;
-}
-
 function cardSignature(account: AccountView, pending: boolean): string {
-  return JSON.stringify([account, state.mode, pending, lang(), isFresh(provenanceOf(account)), banChip(account)]);
+  return JSON.stringify([account, state.mode, pending, lang(), banChip(account)]);
 }
 
 /** The suspension still in force; a timed one disappears once it ends. */
@@ -157,19 +148,6 @@ function banChip(account: AccountView): string {
   const label = ban.until == null ? t("ban.permanent") : t("ban.chip", { time: banRemaining(ban.until) });
   const detail = ban.until == null ? t("ban.permanent") : t("ban.until", { date: banEnd(ban.until) });
   return `<span class="chip chip-ban" data-tooltip="${esc(detail)}">${icon("alert", 11)}${esc(label)}</span>`;
-}
-
-function provenanceLine(account: AccountView): string {
-  const data = provenanceOf(account);
-  if (!data || !account.name || account.riotIdNotFound) return "";
-  const at = data.sourceUpdatedAt;
-  const fresh = isFresh(data);
-  const error = data.error ? t(`freshness.${data.error}`) : "";
-  const label = fresh && !error
-    ? t("freshness.updated", { time: new Date(at!).toLocaleTimeString(lang(), { hour: "2-digit", minute: "2-digit" }) })
-    : t(data.freshness === "unknown" && !error ? "freshness.unknown" : "freshness.stale");
-  const detail = [at != null ? new Date(at).toLocaleString(lang()) : t("freshness.unknown"), error].filter(Boolean).join(" · ");
-  return `<div class="rank-provenance${error ? " has-error" : ""}" data-tooltip="${esc(detail)}">${esc(label)} · ${esc(data.source)}${error ? ` · ${esc(error)}` : ""}</div>`;
 }
 
 function cardInner(account: AccountView, pending: boolean): string {
@@ -204,7 +182,7 @@ function cardInner(account: AccountView, pending: boolean): string {
       `}
       </div>
     </div>
-    ${account.name && !account.riotIdNotFound ? `<div class="history">${historyLine(account)}${provenanceLine(account)}</div>` : ""}
+    ${account.name && !account.riotIdNotFound ? `<div class="history">${historyLine(account)}</div>` : ""}
     ${account.description ? `<p class="desc" data-tooltip="${esc(account.description)}">${esc(account.description)}</p>` : `<p class="desc desc-empty"></p>`}
     <div class="card-actions">
       <button class="btn btn-play" data-act="login" data-tooltip="${esc(t("card.loginTitle"))}">${icon("login", 15)}${esc(t("card.login"))}</button>
@@ -1223,11 +1201,22 @@ async function wireWindow(): Promise<void> {
   const appWindow = getCurrentWindow();
   const actions: Record<string, () => Promise<void>> = {
     minimize: () => appWindow.minimize(),
+    maximize: () => appWindow.toggleMaximize(),
     close: () => appWindow.close(),
   };
   document.querySelectorAll<HTMLButtonElement>("[data-win]").forEach((button) => {
     button.addEventListener("click", () => void actions[button.dataset.win ?? ""]());
   });
+  // Maximize turns into restore while maximized, including after a title bar double-click.
+  const maximize = $<HTMLButtonElement>('[data-win="maximize"]');
+  const sync = async () => {
+    const maximized = await appWindow.isMaximized();
+    maximize.classList.toggle("is-maximized", maximized);
+    maximize.dataset.i18nTitle = maximize.dataset.i18nAria = maximized ? "win.restore" : "win.maximize";
+    applyStatic(maximize.parentElement!);
+  };
+  void sync();
+  void appWindow.onResized(() => void sync());
 }
 
 async function wireEvents(): Promise<void> {
