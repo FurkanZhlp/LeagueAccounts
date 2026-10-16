@@ -1217,7 +1217,7 @@ async function wireWindow(): Promise<void> {
   const sync = async () => {
     const maximized = await appWindow.isMaximized();
     maximize.classList.toggle("is-maximized", maximized);
-    maximize.dataset.i18nTitle = maximize.dataset.i18nAria = maximized ? "win.restore" : "win.maximize";
+    maximize.dataset.i18nAria = maximized ? "win.restore" : "win.maximize";
     applyStatic(maximize.parentElement!);
   };
   void sync();
