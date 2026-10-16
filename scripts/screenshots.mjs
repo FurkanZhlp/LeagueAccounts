@@ -16,6 +16,9 @@ const { version } = JSON.parse(readFileSync("package.json", "utf8"));
 // and show the release version instead of the mock's.
 async function capturePage(browser, base, scene) {
   const page = await demoPage(browser, base, scene);
+  // GitHub's Windows runners turn animations off, which Chrome reports as
+  // reduced motion; the login loader would then hold a single frame.
+  await page.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: "no-preference" }]);
   await page.evaluate((version) => {
     document.getElementById("dev-tools").hidden = true;
     document.getElementById("version").textContent = `v${version}`;
