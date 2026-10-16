@@ -73,7 +73,12 @@ const setUpdate = (change: Partial<UpdateStatus>) => {
 function simulateInstall(launch: boolean): void {
   const total = 14_680_064;
   setUpdate({ phase: "downloading", release, received: 0, total, launch });
+  // At launch, start progressing once the update screen has shown: a slow cold start must
+  // not reach the launch check after the install already finished (and restarted).
+  let shown = !launch;
   const timer = setInterval(() => {
+    shown ||= document.querySelector("#startup-loader .update-screen") !== null;
+    if (!shown) return;
     const received = Math.min(total, update.received + total / 30);
     setUpdate({ received });
     if (received < total) return;
