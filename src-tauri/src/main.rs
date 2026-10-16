@@ -14,7 +14,7 @@ use leagueaccounts::account_manager::KEYRING_SERVICE;
 use leagueaccounts::autotype::auto_type_credentials;
 use leagueaccounts::credentials;
 use leagueaccounts::logging::{self, Event, Reason};
-use leagueaccounts::models::{Account, AccountKey, RankInfo};
+use leagueaccounts::models::{Account, AccountKey, Ban, RankInfo};
 use leagueaccounts::rank_fetcher::{RankFetcher, RankProvider};
 use leagueaccounts::riot_client::{self, Game, LoginError, LoginOutcome, LoginStep};
 use leagueaccounts::utils::{app_data_dir, parse_account_line, region_from_display, settings_file, REGION_MAP};
@@ -393,7 +393,8 @@ enum LoginResult {
 
 /// Sign in with the account. With the Riot method the client is opened (and
 /// the game launched when enabled). A different signed-in account is signed out
-/// automatically before connecting the selected account.
+/// automatically before connecting the selected account. A League ban stops
+/// the login before the game launches, unless `launch_banned` is set.
 #[tauri::command]
 async fn login(
     app: AppHandle,
@@ -401,13 +402,14 @@ async fn login(
     key: Key,
     tft: bool,
     close_running: bool,
+    launch_banned: bool,
 ) -> CommandResult<LoginResult> {
     let account = find_account(&state, key)?;
     let guard = state.login.try_start().ok_or_else(|| fail("login_busy"))?;
     let password = password_for(&account);
     let settings = state.settings.lock().map(|s| s.clone()).unwrap_or_default();
     let shared = Arc::clone(&state);
-    let (events, account_key) = (app.clone(), account.key());
+    let account_key = account.key();
     let result = tauri::async_runtime::spawn_blocking(move || {
         // Acquired before queueing; released only after native renderer cleanup.
         let _guard = guard;
@@ -425,6 +427,10 @@ async fn login(
         let mut progress = |step: LoginStep| {
             step.record();
             let _ = app.emit("login-step", step.code());
+        };
+        let mut on_ban = |ban: Option<Ban>| {
+            remember_ban(&app, &shared, &account_key, ban);
+            launch_banned
         };
         if settings.login_method == LoginMethod::Previous {
             progress(LoginStep::Focus);
@@ -449,13 +455,13 @@ async fn login(
             game,
             close_running,
             &mut progress,
+            &mut on_ban,
             &shared.login.cancel,
         )
     })
     .await
     .unwrap_or(Err(LoginError::WorkerPanicked));
     riot_client::record_login_result(&result);
-    remember_ban(&events, &state, &account_key, &result);
     result
         .map(|outcome| match outcome {
             LoginOutcome::SignedIn => LoginResult::SignedIn,
@@ -472,19 +478,9 @@ async fn login(
         })
 }
 
-/// Keep the suspension Riot reported, or clear it once a Riot sign-in gets
-/// through the check. Typed logins never reach Riot's account information.
-fn remember_ban(
-    app: &AppHandle,
-    state: &Shared,
-    key: &AccountKey,
-    result: &Result<LoginOutcome, LoginError>,
-) {
-    let ban = match result {
-        Err(LoginError::Banned(ban)) => Some(*ban),
-        Ok(LoginOutcome::SignedIn | LoginOutcome::AlreadySignedIn) => None,
-        _ => return,
-    };
+/// Keep the suspension Riot reported at sign-in, or clear it when Riot reports
+/// none. Typed logins never reach Riot's account information.
+fn remember_ban(app: &AppHandle, state: &Shared, key: &AccountKey, ban: Option<Ban>) {
     let Ok(mut manager) = manager(state) else { return };
     let Some(stored) = manager.account_mut(key) else { return };
     if stored.ban == ban {

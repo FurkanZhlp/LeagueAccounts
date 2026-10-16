@@ -519,15 +519,22 @@ fn now_millis() -> u64 {
         .map_or(0, |elapsed| elapsed.as_millis() as u64)
 }
 
-/// Stop before the game starts: Riot disconnects a suspended account at once.
-/// An unreadable userinfo does not block the login.
-fn check_ban() -> Result<(), LoginError> {
-    match LocalApi::read()
-        .and_then(|api| api.userinfo())
-        .and_then(|info| league_ban(&info, now_millis()))
-    {
-        Some(ban) => Err(LoginError::Banned(ban)),
-        None => Ok(()),
+/// Hand the League suspension Riot reports for the signed-in account to
+/// `on_ban`. Riot disconnects a suspended account as soon as the game starts,
+/// so stop before launching one unless `on_ban` returns true. An unreadable
+/// userinfo is not reported and does not block the login.
+fn check_ban(
+    game: Option<Game>,
+    on_ban: &mut dyn FnMut(Option<Ban>) -> bool,
+) -> Result<(), LoginError> {
+    let Some(info) = LocalApi::read().and_then(|api| api.userinfo()) else {
+        return Ok(());
+    };
+    let ban = league_ban(&info, now_millis());
+    let launch_banned = on_ban(ban);
+    match ban {
+        Some(ban) if game.is_some() && !launch_banned => Err(LoginError::Banned(ban)),
+        _ => Ok(()),
     }
 }
 
@@ -707,12 +714,15 @@ fn close_league_with(
 }
 
 /// Sign in through Riot's native form, then launch the requested game.
+/// `on_ban` receives the League suspension Riot reports once signed in and
+/// returns whether a suspended account may still launch the game.
 pub fn login(
     account_id: &str,
     password: &str,
     game: Option<Game>,
     close_running: bool,
     progress: &mut dyn FnMut(LoginStep),
+    on_ban: &mut dyn FnMut(Option<Ban>) -> bool,
     cancel: &AtomicBool,
 ) -> Result<LoginOutcome, LoginError> {
     check_cancelled(cancel)?;
@@ -747,7 +757,7 @@ pub fn login(
                     Some(name) if name.eq_ignore_ascii_case(account_id) => {
                         client.restore()?;
                         check_cancelled(cancel)?;
-                        check_ban()?;
+                        check_ban(game, on_ban)?;
                         if let Some(game) = game {
                             progress(LoginStep::LaunchGame);
                             start_game(game, account_id, cancel)?;
@@ -787,7 +797,7 @@ pub fn login(
     }
     renderer::sign_in(&mut client, account_id, password, progress, cancel)?;
     // Dropping `client` on a ban reopens the normal Riot window.
-    check_ban()?;
+    check_ban(game, on_ban)?;
     if let Some(game) = game {
         // The game replaces the Riot window, so do not reopen it in between.
         // If the launch fails or is cancelled, dropping `client` reopens it.

@@ -230,8 +230,9 @@ export const api = {
   refreshRanks: (force = false) => call<number>("refresh_ranks", { force }),
   copyAccountId: (key: Key) => call<void>("copy_account_id", { key }),
   copyPassword: (key: Key) => call<number>("copy_password", { key }),
-  login: (key: Key, tft: boolean, closeRunning: boolean) =>
-    call<LoginResult>("login", { key, tft, closeRunning }),
+  /** `launchBanned` launches the game even if Riot reports a League ban. */
+  login: (key: Key, tft: boolean, closeRunning: boolean, launchBanned: boolean) =>
+    call<LoginResult>("login", { key, tft, closeRunning, launchBanned }),
   cancelLogin: () => call<void>("cancel_login"),
   gameStatus: (key: Key) => call<GameStatus>("game_status", { key }),
   updateStatus: () => call<UpdateStatus>("update_status"),

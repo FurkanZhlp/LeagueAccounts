@@ -394,16 +394,18 @@ async function login(account: AccountView): Promise<void> {
   if (loginBusy) return;
   loginBusy = true;
   try {
-    const ban = activeBan(account);
+    // A banned account can still sign in to the Riot Client; only the game disconnects.
+    const launching = state.settings?.loginMethod !== "previous" && Boolean(state.settings?.launchGame);
+    const ban = launching ? activeBan(account) : null;
     if (ban && !(await confirmBannedLogin(account, ban))) return;
-    await runLogin(account);
+    await runLogin(account, false, ban !== null);
   } finally {
     loginBusy = false;
     activeLogin = null;
   }
 }
 
-async function runLogin(account: AccountView, closeRunning = false): Promise<void> {
+async function runLogin(account: AccountView, closeRunning = false, launchBanned = false): Promise<void> {
   const viaRiot = state.settings?.loginMethod !== "previous";
   const key = keyOf(account);
 
@@ -413,7 +415,7 @@ async function runLogin(account: AccountView, closeRunning = false): Promise<voi
     if (!status) return;
     if ((status.clientOpen || status.inGame) && !status.sameAccount) {
       if (!(await confirmCloseLeague(account, status.inGame))) return;
-      return runLogin(account, true);
+      return runLogin(account, true, launchBanned);
     }
   }
 
@@ -428,7 +430,7 @@ async function runLogin(account: AccountView, closeRunning = false): Promise<voi
   });
   activeLogin = overlay;
   try {
-    const result = await api.login(key, state.mode === "tft", closeRunning);
+    const result = await api.login(key, state.mode === "tft", closeRunning, launchBanned);
     if (result === "signedIn") {
       overlay.succeed(t("login.success"), launching ? t("toast.gameLaunched") : accountLabel(account));
     } else if (result === "alreadySignedIn") {
@@ -451,7 +453,7 @@ async function runLogin(account: AccountView, closeRunning = false): Promise<voi
       // The client was opened between the check and the login: ask again.
       overlay.close();
       activeLogin = null;
-      return runLogin(account, false);
+      return runLogin(account, false, launchBanned);
     } else {
       overlay.fail(describe(error));
     }

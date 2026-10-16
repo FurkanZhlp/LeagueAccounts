@@ -214,6 +214,14 @@ test("account collection, client frames and silent motion", { timeout: 180000 },
       await page.click('[data-login="close"]');
       await page.waitForSelector(".login-overlay", { hidden: true });
     });
+    await t.test("logging in anyway to a banned account launches the game", async () => {
+      await open("banned");
+      await page.waitForSelector('.modal [data-value="login"]');
+      await page.click('.modal [data-value="login"]');
+      await page.waitForSelector(".login-overlay.is-success", { timeout: 15000 });
+      await page.click('[data-login="close"]');
+      await page.waitForSelector(".login-overlay", { hidden: true });
+    });
     await t.test("framed dropdowns open flush under their frame, follow the keyboard and keep Escape", async () => {
       await open();
       const flyout = select => page.$eval(`${select} + .framed-dropdown .framed-dropdown-options`, (list, owner) => {
