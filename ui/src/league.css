@@ -248,8 +248,8 @@ button:focus-visible, a:focus-visible { color: #f0e6d2; }
 .login-orbit { width: 280px; height: 220px; margin: 0 auto 22px; background: radial-gradient(ellipse, #c8aa6e0b, transparent 68%); }
 .login-emblem { animation: none; filter: none; }
 .login-emblem .emblem { --emblem-size: 240px !important; }
-/* Same size as the startup screen; the animation's canvas is mostly empty, so it may overflow the crest area. */
-.login-loader { position: absolute; top: 50%; left: 50%; translate: -50% -50%; width: 300px; aspect-ratio: 1; pointer-events: none; }
+/* The animation fills only the middle of its canvas: oversize it so the drawing matches the crest it gives way to. */
+.login-loader { position: absolute; top: 50%; left: 50%; translate: -50% -50%; width: 520px; aspect-ratio: 1; pointer-events: none; }
 .login-title { font-size: 27px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: #f0e6d2; }
 .login-account { color: #bfac83; margin: 12px 0 0; font-size: 16px; }
 .login-details { border-left: 1px solid #c8aa6e36; padding-left: 35px; }
@@ -280,6 +280,7 @@ button:focus-visible, a:focus-visible { color: #f0e6d2; }
   .side-link { padding-top: 5px; padding-bottom: 5px; }
   .collection-header { padding-top: 23px; padding-bottom: 20px; }
   .login-orbit { height: 185px; }
+  .login-loader { width: 440px; }
   .login-steps li { padding-top: 5px; padding-bottom: 5px; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -307,7 +308,7 @@ button:focus-visible, a:focus-visible { color: #f0e6d2; }
   .login-stage { grid-template-columns: minmax(0,1fr); gap: 24px; width: 440px; max-width: 100%; }
   .login-orbit { height: 110px; margin-bottom: 10px; }
   .login-emblem .emblem { --emblem-size: 130px !important; }
-  .login-loader { width: 160px; }
+  .login-loader { width: 280px; }
   .login-details { padding-left: 0; border: 0; }
 }
 
