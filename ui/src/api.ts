@@ -21,27 +21,6 @@ export interface TftRank {
   lastSet: string;
 }
 
-/** `[unixMs, score]` pairs, oldest first (see `scoreLabel`). */
-export type TrendPoint = [number, number];
-
-export interface Trend {
-  lol: TrendPoint[];
-  tft: TrendPoint[];
-}
-
-export interface HistoryPoint {
-  t: number;
-  tier: string;
-  division: string;
-  lp: number;
-  score: number;
-}
-
-export interface History {
-  lol: HistoryPoint[];
-  tft: HistoryPoint[];
-}
-
 export type LoginMethod = "riot" | "previous";
 
 export interface Settings {
@@ -51,7 +30,8 @@ export interface Settings {
   launchAtStartup: boolean;
   loginMethod: LoginMethod;
   launchGame: boolean;
-  checkUpdates: boolean;
+  /** Install new releases automatically; when off, only notify. */
+  autoUpdate: boolean;
   riotClientFound: boolean;
   tftInstalled: boolean;
 }
@@ -71,6 +51,8 @@ export type LoginStep =
   | "openClient"
   | "waitAuth"
   | "signOut"
+  | "connect"
+  | "verification"
   | "findWindow"
   | "focus"
   | "type"
@@ -92,15 +74,68 @@ export interface Release {
   publishedAt: string;
 }
 
+export type UpdatePhase =
+  | "idle"
+  | "checking"
+  | "upToDate"
+  | "available"
+  | "downloading"
+  | "ready"
+  | "restarting"
+  | "failed";
+
+/** "available" and "failed" fall back to the download banner; "ready" is installed. */
 export interface UpdateStatus {
+  phase: UpdatePhase;
   current: string;
-  latest: Release | null;
-  newer: boolean;
+  /** The latest release when known, newer or not. */
+  release: Release | null;
+  received: number;
+  total: number;
+  /** The check the app starts with, which may hold the loading screen. */
+  launch: boolean;
+  /** Increases with every change; an older snapshot is ignored. */
+  seq: number;
 }
 
-export type LoginResult = "signedIn" | "typed" | "alreadySignedIn" | "otherAccount";
+export type LoginResult = "signedIn" | "typed" | "alreadySignedIn";
+
+export interface RankProvenance {
+  source: string;
+  fetchedAt: number | null;
+  sourceUpdatedAt: number | null;
+  freshness: "fresh" | "stale" | "unknown";
+  /** Set by the backend from its single age threshold. */
+  freshUntil: number | null;
+  renewalAttempted: boolean;
+  renewalSucceeded: boolean;
+  error: "profile_not_found" | "rate_limited" | "provider_unavailable" | "parsing_failed" | "forbidden" | "timeout" | "renewal_failed" | null;
+}
+
+/** `[unixMs, score]` pairs, oldest first (see `scoreLabel`). */
+export type TrendPoint = [number, number];
+
+export interface Trend {
+  lol: TrendPoint[];
+  tft: TrendPoint[];
+}
+
+export interface HistoryPoint {
+  t: number;
+  tier: string;
+  division: string;
+  lp: number;
+  score: number;
+}
+
+export interface History {
+  lol: HistoryPoint[];
+  tft: HistoryPoint[];
+}
 
 export interface AccountView {
+  rankProvenance?: RankProvenance | null;
+  tftProvenance?: RankProvenance | null;
   accountId: string;
   name: string;
   riotIdNotFound: boolean;
@@ -111,7 +146,14 @@ export interface AccountView {
   hasPassword: boolean;
   lol: LolRank;
   tft: TftRank;
+  /** League suspension reported at the last Riot sign-in; `until` is null when permanent. */
+  ban?: Ban | null;
+  /** LP history points for the card trend (this fork only). */
   trend: Trend;
+}
+
+export interface Ban {
+  until: number | null;
 }
 
 export const accountLabel = (account: AccountView): string => account.name || account.accountId;
@@ -156,6 +198,10 @@ export interface Bootstrap {
 export interface BatchResult {
   added: number;
   skipped: number;
+}
+
+export interface BulkAddResult {
+  added: number;
   skippedLines: number[];
 }
 
@@ -200,20 +246,25 @@ export const api = {
   bootstrap: () => call<Bootstrap>("bootstrap"),
   listAccounts: () => call<AccountView[]>("list_accounts"),
   addAccount: (input: NewAccount) => call<AccountView>("add_account", { input }),
-  multiAdd: (text: string, region: string) => call<BatchResult>("multi_add", { text, region }),
+  multiAdd: (text: string, region: string) => call<BulkAddResult>("multi_add", { text, region }),
   updateAccount: (key: Key, name: string, description: string, password: string | null = null) =>
     call<AccountView>("update_account", { key, name, description, password }),
+  getHistory: (key: Key) => call<History>("get_history", { key }),
   deleteAccount: (key: Key) => call<void>("delete_account", { key }),
-  refreshRanks: () => call<number>("refresh_ranks"),
+  refreshRanks: (force = false) => call<number>("refresh_ranks", { force }),
   copyAccountId: (key: Key) => call<void>("copy_account_id", { key }),
   copyPassword: (key: Key) => call<number>("copy_password", { key }),
-  login: (key: Key, tft: boolean, switchAccount: boolean, closeRunning: boolean) =>
-    call<LoginResult>("login", { key, tft, switchAccount, closeRunning }),
+  /** `launchBanned` launches the game even if Riot reports a League ban. */
+  login: (key: Key, tft: boolean, closeRunning: boolean, launchBanned: boolean) =>
+    call<LoginResult>("login", { key, tft, closeRunning, launchBanned }),
   cancelLogin: () => call<void>("cancel_login"),
   gameStatus: (key: Key) => call<GameStatus>("game_status", { key }),
+  updateStatus: () => call<UpdateStatus>("update_status"),
   checkUpdate: () => call<UpdateStatus>("check_update"),
+  /** No login, rank refresh or match in progress. */
+  updateIdle: () => call<boolean>("update_idle"),
+  restartToUpdate: () => call<void>("restart_to_update"),
   openRelease: (url: string) => call<void>("open_release", { url }),
-  getHistory: (key: Key) => call<History>("get_history", { key }),
   getSettings: () => call<Settings>("get_settings"),
   updateSettings: (input: SettingsInput) => call<Settings>("update_settings", { input }),
   exportData: (title: string) => call<string | null>("export_data", { title }),
@@ -225,8 +276,8 @@ export const api = {
 export const events = {
   onLoginStep: (handler: (step: LoginStep) => void): Promise<UnlistenFn> =>
     listen<LoginStep>("login-step", (event) => handler(event.payload)),
-  onUpdateAvailable: (handler: (release: Release) => void): Promise<UnlistenFn> =>
-    listen<Release>("update-available", (event) => handler(event.payload)),
+  onUpdateStatus: (handler: (status: UpdateStatus) => void): Promise<UnlistenFn> =>
+    listen<UpdateStatus>("update-status", (event) => handler(event.payload)),
   onRefreshStarted: (handler: (started: RefreshStarted) => void): Promise<UnlistenFn> =>
     listen<RefreshStarted>("refresh-started", (event) => handler(event.payload)),
   onSchedule: (handler: (schedule: Schedule) => void): Promise<UnlistenFn> =>
@@ -237,4 +288,6 @@ export const events = {
     listen<AccountView>("rank-update", (event) => handler(event.payload)),
   onRefreshDone: (handler: (done: RefreshDone) => void): Promise<UnlistenFn> =>
     listen<RefreshDone>("refresh-done", (event) => handler(event.payload)),
+  onAccountUpdate: (handler: (account: AccountView) => void): Promise<UnlistenFn> =>
+    listen<AccountView>("account-update", (event) => handler(event.payload)),
 };

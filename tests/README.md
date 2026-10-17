@@ -1,8 +1,10 @@
 # Regression verification
 
-Run `cargo test --locked --all-targets` and
-`cargo clippy --locked --all-targets -- -D warnings` on Windows. The workflow in
-`.github/workflows/rust.yml` also builds the release executable.
+Run `cargo test --locked --workspace --all-targets` and
+`cargo clippy --locked --workspace --all-targets -- -D warnings` on Windows.
+Build the UI first (`npm ci` and `npm run build`) because the Tauri shell embeds
+`dist` at compile time. The workflow in `.github/workflows/rust.yml` runs these
+checks and also builds the release executable.
 
 The UI tests cover the real headless egui application with a temporary account
 file and a rank provider that refuses network access. Parser tests use static
@@ -23,9 +25,73 @@ panics containing dummy IDs/passwords (including a sensitive thread name).
 It checks the readable log files for expected diagnostic events and verifies
 that no dummy secrets, input JSON, or user paths reached the files.
 
+Riot login tests simulate cold startup, a signed-out client, a signed-in client,
+and lifecycle sign-out with a loopback HTTP server. The lifecycle API is the
+readiness source; a missing RSO authorization is not treated as a login form.
+Diagnostic tests verify that repeated waiting states are logged once per
+transition and remain fixed categories without account data. Renderer tests
+reject nonlocal debugger URLs and unknown authentication results.
+Run `npm test` for native-form regression tests covering MFA rejection and
+authentication errors while a challenge remains visible. Startup tests verify
+that a normal Riot window is available before waiting for session readiness.
+
+The endpoint contract is described in the [extracted Riot API documentation](https://github.com/KebsCS/lcu-and-riotclient-api/blob/main/riotclient/data_info.json).
+The signed-out `PendingLoginStrategy` and signed-in `PendingProductContext`
+responses are documented in [these desktop client observations](https://github.com/ArtemChig/LeagueSwitcher/blob/main/docs/RESEARCH.md).
+These fixtures do not replace testing against the installed Riot Client.
+
+Update tests cover asset selection (own release URLs, size and the SHA-256
+`digest` GitHub reports), rejection of a download that doesn't match the digest,
+the executable swap and its rollback, cleanup of leftovers, restart arguments and
+waiting for the previous process. `tests/update.test.mjs` drives the launch
+update screen, the restart notice and the download banner through the browser
+mock. The end-to-end procedure on Windows is in
+[docs/automatic-updates.md](../docs/automatic-updates.md#testing).
+
+Account storage tests inject credential failures with an in-memory store.
+They cover skipped imports, duplicate batches, save and deletion
+rollback, restoration of overwritten passwords, and temporary-file cleanup.
+On Windows they also verify that a locked account file survives a failed
+replacement intact.
+
+A Windows regression also exercises the native credential adapter with dummy
+entries under a unique test service. It verifies that a failed deletion restores
+the selected account without changing another account's password or a stale
+shared entry. The dummy entries are removed even if an assertion fails.
+
+## Previous-window typing regressions
+
+The typing tests exercise the production sequencing helper with mocked clipboard
+and input operations. They cover focus/cancellation guards before every action,
+focus loss during the clipboard preparation delay, failed clipboard writes,
+rejected input, field order, and an empty password. Actual Windows typing keeps
+using `clipboard::set_private_text`; ordinary clipboard writes must not replace
+it when changing the focus logic.
+
+Previous-window typing waits for a stable foreground target and stops if that
+target loses focus. Riot login uses its native renderer, so it no longer needs
+window geometry, DPI thresholds, or foreground activation. The interactive
+checks below still cover real mixed-monitor layouts and Riot's login form.
+
 ## Interactive Windows checks
 
 Use a disposable dummy account and a test window, never real credentials.
+
+For the monitor regression, test both login methods with Riot and League
+Accounts on different displays. Cover 100%, 125%, 150%, 200%, and 300% scaling,
+a secondary monitor to the left/above the primary, and minimized restoration.
+Include system DPI at 200% with a 100% secondary display and a system-DPI-aware
+dummy form on that secondary display, not only per-monitor-aware targets.
+In the previous-window method, focus the dummy form before returning to League
+Accounts.
+
+For previous-window typing, activation must finish first. Change focus:
+remaining steps must stop, without reactivating the target or continuing in the
+new window. Repeat during the clipboard preparation delay where practical.
+Enable Windows clipboard history and verify that neither dummy credential is
+added to Win+V history and that the current clipboard is cleared after successful
+and aborted typing. Also repeat cold-start, account-switch, and already-signed-in
+flows to verify that the lifecycle/endpoint/identity safeguards are retained.
 
 1. Select an account, then focus Search, an add-account input, or the description
    editor. Delete must edit text without removing the account. Ctrl+C must copy
@@ -44,3 +110,36 @@ Use a disposable dummy account and a test window, never real credentials.
 4. Verify Add New Account, Multi Add, and Friend Elo with an empty account list
    and a long list. Reduce the window height and scroll the main content to the
    controls below the independently scrolling table.
+5. With the Riot login method and a test account, try a cold start, a minimized
+   client, switching accounts, and cancelling during setup or verification.
+   Credentials must be submitted without keystrokes or foreground focus. CAPTCHA
+   and MFA must appear in Riot Client. A rejected login must stop without retries.
+   After cancellation, failure, or success without game launch, check that a
+   normal Riot window is restored; when the game launches, Riot's window must
+   stay closed. In every case the temporary debugger must be gone. Verify the
+   selected identity before launching the game. Logs must contain fixed categories only.
+
+## Renderer login
+
+`node scripts/try-riot-renderer-login.mjs <saved-account-id>` is a Windows
+development prototype of the native Rust integration in the app. Close the normal
+Riot Client and any game first. It starts Riot Services with `--headless`, runs
+one Electron renderer, fills the native React form while minimized, and verifies
+the signed-in username through the local API. An already-connected target account
+is left alone. CAPTCHA/MFA, when required, stay in Riot's own UI for a human to
+complete. The prototype does not retry rejected credentials automatically.
+
+The debugger uses an allocated nonzero loopback port. Chromium's special
+`--remote-debugging-port=0` launch sets `navigator.webdriver=true`; that setting
+coincided with rejected authentication in the live experiment. After switching
+to a nonzero port, a live login returned `success` on its first attempt without
+a visible CAPTCHA. The target account remained connected after replacing the
+debug renderer with a normal renderer, and no debugger remained enabled.
+This is one successful end-to-end test, not a guarantee that CAPTCHA will never
+be required. Riot's internal React handlers and module exports can change.
+
+`--verify-fill-only` checks the DOM and React credential state without submitting
+the login form. Diagnostics contain fixed categories and match booleans only;
+credentials and authentication tokens are never printed. The experiment does
+not modify Riot's installed files. The initial direct-auth and separate-browser
+CAPTCHA prototypes were removed after validating the native-renderer approach.

@@ -1,19 +1,41 @@
 use crate::logging::{self, Event, Reason};
-use crate::models::{Account, RankInfo, TftRank};
+use crate::models::{Account, Freshness, RankFetchError, RankInfo, RankProvenance, TftRank};
 use html_escape::decode_html_entities;
 use regex::Regex;
 use scraper::{Html, Selector};
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock};
 use std::time::Duration;
+
+mod renewal;
+use renewal::{freshness, now_ms, ProfileUpdate, RenewalError, RenewalState, MAX_AGE};
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum RefreshMode {
+    #[default]
+    Manual,
+    Auto,
+    /// Bypass our age threshold, but always respect OP.GG's renewableAt/429.
+    Force,
+}
 
 /// Provider abstraction used by the manager and by deterministic tests.
 pub trait RankProvider: Send + Sync {
     fn fetch_rank(&self, account: &Account) -> RankInfo;
+    fn fetch_rank_with_mode(&self, account: &Account, _mode: RefreshMode) -> RankInfo {
+        self.fetch_rank(account)
+    }
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct RankFetcher {
     client: reqwest::blocking::Client,
+    renewal: Arc<RenewalState>,
+}
+
+impl Default for RankFetcher {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl RankFetcher {
@@ -29,26 +51,60 @@ impl RankFetcher {
                 logging::record(Event::RankClientFailed, Reason::from_request(&error));
                 reqwest::blocking::Client::new()
             });
-        Self { client }
+        Self {
+            client,
+            renewal: Arc::default(),
+        }
     }
 
     pub fn fetch_rank(&self, account: &Account) -> RankInfo {
+        self.fetch_rank_with_mode(account, RefreshMode::Manual)
+    }
+
+    pub fn fetch_rank_with_mode(&self, account: &Account, mode: RefreshMode) -> RankInfo {
         if account.name.trim().is_empty() {
             return RankInfo::unranked();
         }
         let url = self.build_opgg_url(&account.region, &account.name);
         let tft_url = self.build_opgg_tft_url(&account.region, &account.name);
-        self.fetch_profiles(&url, &tft_url)
+        let mut info = self.fetch_profiles(&url, &tft_url, &account.region, mode);
+        // If a network request failed, provenance still describes the retained data.
+        for (next, previous) in [
+            (&mut info.provenance, &account.rank_provenance),
+            (&mut info.tft_provenance, &account.tft_provenance),
+        ] {
+            if let (Some(next), Some(previous)) = (next.as_mut(), previous) {
+                if next.fetched_at.is_none() {
+                    next.fetched_at = previous.fetched_at;
+                    next.source_updated_at = previous.source_updated_at;
+                    next.freshness = Freshness::Stale;
+                    next.fresh_until = None;
+                }
+            }
+        }
+        info
     }
 
-    fn fetch_profiles(&self, lol_url: &str, tft_url: &str) -> RankInfo {
-        let mut rank = self.fetch_rank_from_url(lol_url);
+    fn fetch_profiles(
+        &self,
+        lol_url: &str,
+        tft_url: &str,
+        region: &str,
+        mode: RefreshMode,
+    ) -> RankInfo {
+        let mut rank = self.fetch_rank_from_url(lol_url, region, mode);
         match self.fetch_tft_from_url(tft_url) {
             Ok(tft) => {
                 rank.tft = Some(tft);
                 rank.riot_id_not_found = Some(false);
+                rank.tft_provenance = Some(RankProvenance {
+                    source: "OP.GG".into(),
+                    fetched_at: Some(now_ms()),
+                    ..Default::default()
+                });
             }
             Err(reason) => {
+                rank.tft_provenance = Some(failed_provenance(reason));
                 if rank.riot_id_not_found == Some(true) && reason != Reason::HttpNotFound {
                     rank.riot_id_not_found = None;
                 }
@@ -64,7 +120,7 @@ impl RankFetcher {
                 if !decoded_payload.contains("profile_icons/profileIcon") {
                     return Err(Reason::ProfileMissing);
                 }
-                Ok(self.parse_tft_from_opgg(&decoded_payload))
+                self.parse_tft_profile(&decoded_payload)
             })
             .inspect_err(|reason| logging::record(Event::TftFetchFailed, *reason))
     }
@@ -74,18 +130,27 @@ impl RankFetcher {
     /// The page embeds the current set as the first `"entry":{...}` object and
     /// every earlier set as `{"setName":"TFTSetN","entry":{...}}`, newest first.
     pub fn parse_tft_from_opgg(&self, decoded_payload: &str) -> TftRank {
-        static ENTRY_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#""entry"\s*:\s*"#).expect("valid TFT entry regex"));
-        let entry = &*ENTRY_RE;
-        static SET_NAME_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#""setName"\s*:\s*"([^"]+)"\s*,\s*$"#).expect("valid TFT set regex"));
-        let set_name = &*SET_NAME_RE;
+        self.parse_tft_profile(decoded_payload)
+            .unwrap_or_else(|_| TftRank::error())
+    }
+
+    fn parse_tft_profile(&self, decoded_payload: &str) -> Result<TftRank, Reason> {
+        static ENTRY: LazyLock<Regex> =
+            LazyLock::new(|| Regex::new(r#""entry"\s*:\s*"#).expect("valid TFT entry regex"));
+        static SET_NAME: LazyLock<Regex> = LazyLock::new(|| {
+            Regex::new(r#""setName"\s*:\s*"([^"]+)"\s*,\s*$"#).expect("valid TFT set regex")
+        });
         let mut current: Option<serde_json::Value> = None;
         let mut current_set = None;
         let mut last_set: Option<serde_json::Value> = None;
-        for found in entry.find_iter(decoded_payload) {
-            let Some(Ok(value)) = serde_json::Deserializer::from_str(&decoded_payload[found.end()..])
-                .into_iter::<serde_json::Value>()
-                .next()
+        let mut malformed = false;
+        for found in ENTRY.find_iter(decoded_payload) {
+            let Some(Ok(value)) =
+                serde_json::Deserializer::from_str(&decoded_payload[found.end()..])
+                    .into_iter::<serde_json::Value>()
+                    .next()
             else {
+                malformed = true;
                 continue;
             };
             if !value.is_object() {
@@ -98,7 +163,7 @@ impl RankFetcher {
             let prefix = decoded_payload
                 .get(prefix_start..found.start())
                 .unwrap_or_default();
-            match set_name.captures(prefix) {
+            match SET_NAME.captures(prefix) {
                 None if current.is_none() => current = Some(value),
                 Some(captures) if current.is_some() => {
                     let name = captures.get(1).map(|m| m.as_str().to_owned());
@@ -119,6 +184,11 @@ impl RankFetcher {
             }
         }
 
+        // No entry (or `"entry":null`) is a player without TFT history: Unranked.
+        // Only a truncated or unreadable entry is a parsing failure.
+        if current.is_none() && malformed {
+            return Err(Reason::ProfileMissing);
+        }
         let mut rank = TftRank::default();
         if let Some(ranked) = current.as_ref().map(|entry| &entry["RANKED_TFT"]) {
             if let Some(tier) = ranked["tier"].as_str() {
@@ -147,7 +217,7 @@ impl RankFetcher {
                 })
             })
             .unwrap_or_else(|| "Unranked".to_owned());
-        rank
+        Ok(rank)
     }
 
     pub fn build_opgg_tft_url(&self, region: &str, summoner_name: &str) -> String {
@@ -155,13 +225,14 @@ impl RankFetcher {
             .replacen("/lol/summoners/", "/tft/summoners/", 1)
     }
 
-    fn fetch_rank_from_url(&self, url: &str) -> RankInfo {
-        self.fetch_from_opgg(url)
+    fn fetch_rank_from_url(&self, url: &str, region: &str, mode: RefreshMode) -> RankInfo {
+        self.fetch_from_opgg(url, region, mode)
             .map(|info| self.with_defaults(info))
             .unwrap_or_else(|reason| {
                 logging::record(Event::RankFetchFailed, reason);
                 RankInfo {
                     riot_id_not_found: (reason == Reason::HttpNotFound).then_some(true),
+                    provenance: Some(failed_provenance(reason)),
                     ..RankInfo::error()
                 }
             })
@@ -185,12 +256,25 @@ impl RankFetcher {
     }
 
     fn fetch_page(&self, url: &str) -> Result<String, Reason> {
-        let response = self
-            .client
-            .get(url)
+        self.request_text(self.client.get(url))
+    }
+
+    /// Any 429 starts the renewal cooldown; it never blocks plain profile reads.
+    fn request_text(&self, request: reqwest::blocking::RequestBuilder) -> Result<String, Reason> {
+        let response = request
             .header(reqwest::header::ACCEPT_LANGUAGE, "en-US,en;q=0.9")
             .send()
-            .map_err(|error| Reason::from_request(&error))?
+            .map_err(|error| Reason::from_request(&error))?;
+        if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+            self.renewal.set_cooldown(
+                response
+                    .headers()
+                    .get(reqwest::header::RETRY_AFTER)
+                    .and_then(|value| value.to_str().ok())
+                    .and_then(renewal::retry_after),
+            );
+        }
+        let response = response
             .error_for_status()
             .map_err(|error| Reason::from_request(&error))?;
         response.text().map_err(|error| {
@@ -202,21 +286,75 @@ impl RankFetcher {
         })
     }
 
-    fn fetch_from_opgg(&self, url: &str) -> Result<RankInfo, Reason> {
+    fn fetch_from_opgg(
+        &self,
+        url: &str,
+        region: &str,
+        mode: RefreshMode,
+    ) -> Result<RankInfo, Reason> {
         let body = self.fetch_page(url)?;
+        let (mut rank, profile) = self.parse_document(&body)?;
+        let mut provenance = sourced_provenance(profile.as_ref().and_then(|p| p.updated_at));
+        if let Some(profile) = profile.filter(|p| p.should_renew(mode, now_ms())) {
+            match self.renew_profile(url, region, &body, &profile) {
+                Ok(finished_at) => {
+                    provenance.renewal_attempted = true;
+                    match self
+                        .fetch_page(url)
+                        .and_then(|next| self.parse_document(&next))
+                    {
+                        Ok((next, profile)) => {
+                            rank = next;
+                            provenance = sourced_provenance(profile.and_then(|p| p.updated_at));
+                            provenance.renewal_attempted = true;
+                            provenance.renewal_succeeded = provenance.freshness == Freshness::Fresh
+                                && provenance
+                                    .source_updated_at
+                                    .is_some_and(|at| at >= finished_at);
+                            if !provenance.renewal_succeeded {
+                                provenance.freshness = Freshness::Stale;
+                                provenance.fresh_until = None;
+                                provenance.error = Some(RankFetchError::RenewalFailed);
+                            }
+                        }
+                        Err(reason) => {
+                            provenance.error = Some(fetch_error(reason));
+                            provenance.freshness = Freshness::Stale;
+                            provenance.fresh_until = None;
+                        }
+                    }
+                }
+                Err(RenewalError::NotSent(error)) => provenance.error = Some(error),
+                Err(RenewalError::Failed(error)) => {
+                    provenance.renewal_attempted = true;
+                    provenance.error = Some(error);
+                }
+            }
+        }
+        rank.provenance = Some(provenance);
+        Ok(rank)
+    }
+
+    /// Parse a fetched document independently of the network and renewal protocol.
+    pub fn parse_profile(&self, body: &str) -> Result<RankInfo, Reason> {
+        self.parse_document(body).map(|(rank, _)| rank)
+    }
+
+    /// Decode once, then read both the standing and OP.GG's update metadata.
+    fn parse_document(&self, body: &str) -> Result<(RankInfo, Option<ProfileUpdate>), Reason> {
         let decoded_payload = decode_html_entities(&body).replace("\\\"", "\"");
         if !decoded_payload.contains("profile_icons/profileIcon") {
             return Err(Reason::ProfileMissing);
         }
 
-        let soup = Html::parse_document(&body);
+        let soup = Html::parse_document(body);
         let mut rank = self.parse_current_rank_from_opgg(&soup, &decoded_payload);
         rank.level = self.parse_level_from_opgg(&soup, &decoded_payload);
         let (reached, finished) = self.parse_last_season_from_opgg(&decoded_payload);
         rank.reached_last_season = reached;
         rank.finished_last_season = finished;
         rank.riot_id_not_found = Some(false);
-        Ok(rank)
+        Ok((rank, ProfileUpdate::parse(&decoded_payload)))
     }
 
     pub fn parse_current_rank_from_opgg(&self, soup: &Html, decoded_payload: &str) -> RankInfo {
@@ -234,12 +372,16 @@ impl RankFetcher {
             }
         }
 
-        if tier == "Unranked" {
-            static RE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(
-                r#""tier_info":\{"lp":(?P<lp>\d+),"tier":"(?P<tier>[A-Z_]+)","label":"(?P<label>[^"]+)"\}"#,
-            ).expect("valid OP.GG tier regex"));
-        let re = &*RE_RE;
-            if let Some(captures) = re.captures_iter(decoded_payload).last() {
+        // OP.GG's Lv. description explicitly denotes an unranked profile.
+        // Never use another player's or a historical tier_info for that profile.
+        let explicitly_unranked = meta_description(soup)
+            .is_some_and(|text| text.contains(" / Lv. ") || text.contains(" / Unranked"));
+        if tier == "Unranked" && !explicitly_unranked {
+            static TIER_INFO: LazyLock<Regex> = LazyLock::new(|| {
+                let pattern = r#""tier_info":\{"lp":(?P<lp>\d+),"tier":"(?P<tier>[A-Z_]+)","label":"(?P<label>[^"]+)"\}"#;
+                Regex::new(pattern).expect("valid OP.GG tier regex")
+            });
+            if let Some(captures) = TIER_INFO.captures_iter(decoded_payload).last() {
                 let label = captures
                     .name("label")
                     .map(|value| value.as_str())
@@ -271,9 +413,9 @@ impl RankFetcher {
 
     pub fn parse_level_from_opgg(&self, soup: &Html, decoded_payload: &str) -> String {
         if let Some(description) = meta_description(soup) {
-            static RE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\bLv\.\s*(\d+)\b").expect("valid level regex"));
-        let re = &*RE_RE;
-            if let Some(captures) = re.captures(&description) {
+            static LEVEL: LazyLock<Regex> =
+                LazyLock::new(|| Regex::new(r"\bLv\.\s*(\d+)\b").expect("valid level regex"));
+            if let Some(captures) = LEVEL.captures(&description) {
                 return captures
                     .get(1)
                     .map(|value| value.as_str().to_owned())
@@ -281,18 +423,22 @@ impl RankFetcher {
             }
         }
 
-        static PROFILE_LEVEL_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?s)profile_icons/profileIcon\d+\.jpg.{0,1200}?<span[^>]*>(\d+)</span>").expect("valid profile level regex"));
-        let profile_level = &*PROFILE_LEVEL_RE;
-        if let Some(captures) = profile_level.captures(decoded_payload) {
+        static PROFILE_LEVEL: LazyLock<Regex> = LazyLock::new(|| {
+            Regex::new(r"(?s)profile_icons/profileIcon\d+\.jpg.{0,1200}?<span[^>]*>(\d+)</span>")
+                .expect("valid profile level regex")
+        });
+        if let Some(captures) = PROFILE_LEVEL.captures(decoded_payload) {
             return captures
                 .get(1)
                 .map(|value| value.as_str().to_owned())
                 .unwrap_or_default();
         }
 
-        static REACT_LEVEL_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"(?s)profile_icons/profileIcon\d+\.jpg.{0,1600}?"children":(\d+)"#).expect("valid react level regex"));
-        let react_level = &*REACT_LEVEL_RE;
-        react_level
+        static REACT_LEVEL: LazyLock<Regex> = LazyLock::new(|| {
+            Regex::new(r#"(?s)profile_icons/profileIcon\d+\.jpg.{0,1600}?"children":(\d+)"#)
+                .expect("valid react level regex")
+        });
+        REACT_LEVEL
             .captures(decoded_payload)
             .and_then(|captures| captures.get(1))
             .map(|value| value.as_str().to_owned())
@@ -300,10 +446,10 @@ impl RankFetcher {
     }
 
     pub fn parse_last_season_from_opgg(&self, decoded_payload: &str) -> (String, String) {
-        static HISTORY_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#""rank_entries"\s*:\s*"#).expect("valid history regex"));
-        let history = &*HISTORY_RE;
+        static HISTORY: LazyLock<Regex> =
+            LazyLock::new(|| Regex::new(r#""rank_entries"\s*:\s*"#).expect("valid history regex"));
 
-        for entry in history.find_iter(decoded_payload) {
+        for entry in HISTORY.find_iter(decoded_payload) {
             // Parse one complete season object from the surrounding React payload.
             // Field order and additional rank metadata must not affect extraction.
             let Some(Ok(entries)) =
@@ -343,11 +489,11 @@ impl RankFetcher {
     }
 
     pub fn parse_rank_text(&self, text: &str) -> Option<(String, String, String)> {
-        static RANK_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(
-            r"(?i)\b(?P<tier>Challenger|Grandmaster|Master|Diamond|Emerald|Platinum|Gold|Silver|Bronze|Iron)\s*(?P<division>IV|III|II|I|[1-4])?\s+(?P<lp>[\d,]+)\s*LP\b",
-        ).expect("valid rank regex"));
-        let rank = &*RANK_RE;
-        let captures = rank.captures(text)?;
+        static RANK: LazyLock<Regex> = LazyLock::new(|| {
+            let pattern = r"(?i)\b(?P<tier>Challenger|Grandmaster|Master|Diamond|Emerald|Platinum|Gold|Silver|Bronze|Iron)\s*(?P<division>IV|III|II|I|[1-4])?\s+(?P<lp>[\d,]+)\s*LP\b";
+            Regex::new(pattern).expect("valid rank regex")
+        });
+        let captures = RANK.captures(text)?;
         Some(
             self.normalize_rank(
                 captures.name("tier")?.as_str(),
@@ -404,9 +550,10 @@ impl RankFetcher {
     }
 
     pub fn division_from_label(&self, label: &str) -> String {
-        static RE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b[A-Z]+\s+([1-4])\b").expect("valid division regex"));
-        let re = &*RE_RE;
-        re.captures(label)
+        static DIVISION: LazyLock<Regex> =
+            LazyLock::new(|| Regex::new(r"\b[A-Z]+\s+([1-4])\b").expect("valid division regex"));
+        DIVISION
+            .captures(label)
             .and_then(|captures| captures.get(1))
             .map(|value| value.as_str().to_owned())
             .unwrap_or_default()
@@ -417,11 +564,11 @@ impl RankFetcher {
         if tier_text.is_empty() {
             return String::new();
         }
-        static RANK_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(
-            r"(?i)^(?P<tier>Challenger|Grandmaster|Master|Diamond|Emerald|Platinum|Gold|Silver|Bronze|Iron)\s*(?P<division>IV|III|II|I|[1-4])?",
-        ).expect("valid history rank regex"));
-        let rank = &*RANK_RE;
-        let Some(captures) = rank.captures(tier_text) else {
+        static RANK: LazyLock<Regex> = LazyLock::new(|| {
+            let pattern = r"(?i)^(?P<tier>Challenger|Grandmaster|Master|Diamond|Emerald|Platinum|Gold|Silver|Bronze|Iron)\s*(?P<division>IV|III|II|I|[1-4])?";
+            Regex::new(pattern).expect("valid history rank regex")
+        });
+        let Some(captures) = RANK.captures(tier_text) else {
             return title_case(tier_text);
         };
         let (tier, division, _) = self.normalize_rank(
@@ -476,6 +623,8 @@ impl RankFetcher {
                 rank.finished_last_season
             },
             tft: rank.tft,
+            provenance: rank.provenance,
+            tft_provenance: rank.tft_provenance,
         }
     }
 }
@@ -483,6 +632,43 @@ impl RankFetcher {
 impl RankProvider for RankFetcher {
     fn fetch_rank(&self, account: &Account) -> RankInfo {
         RankFetcher::fetch_rank(self, account)
+    }
+    fn fetch_rank_with_mode(&self, account: &Account, mode: RefreshMode) -> RankInfo {
+        RankFetcher::fetch_rank_with_mode(self, account, mode)
+    }
+}
+
+fn fetch_error(reason: Reason) -> RankFetchError {
+    match reason {
+        Reason::HttpNotFound => RankFetchError::ProfileNotFound,
+        Reason::HttpRateLimited => RankFetchError::RateLimited,
+        Reason::HttpForbidden | Reason::HttpUnauthorized => RankFetchError::Forbidden,
+        Reason::Timeout => RankFetchError::Timeout,
+        Reason::ProfileMissing | Reason::ResponseBody => RankFetchError::ParsingFailed,
+        _ => RankFetchError::ProviderUnavailable,
+    }
+}
+
+fn sourced_provenance(source_updated_at: Option<u64>) -> RankProvenance {
+    let now = now_ms();
+    let freshness = freshness(source_updated_at, now);
+    RankProvenance {
+        source: "OP.GG".into(),
+        fetched_at: Some(now),
+        source_updated_at,
+        freshness,
+        fresh_until: source_updated_at
+            .filter(|_| freshness == Freshness::Fresh)
+            .map(|at| at + MAX_AGE.as_millis() as u64),
+        ..Default::default()
+    }
+}
+
+fn failed_provenance(reason: Reason) -> RankProvenance {
+    RankProvenance {
+        source: "OP.GG".into(),
+        error: Some(fetch_error(reason)),
+        ..Default::default()
     }
 }
 
@@ -587,12 +773,13 @@ mod tests {
                             break;
                         }
                     }
-                    let body = "<img src='profile_icons/profileIcon6.jpg'>";
+                    let body = r#"<meta name="description" content="Player / Lv. 83"><img src="profile_icons/profileIcon6.jpg">{"entry":{}}"#;
                     write!(stream, "HTTP/1.1 {status} Test\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
                 }
             }
         });
         let fetcher = RankFetcher {
+            renewal: Arc::default(),
             client: reqwest::blocking::Client::builder()
                 .no_proxy()
                 .timeout(Duration::from_secs(5))
@@ -600,9 +787,18 @@ mod tests {
                 .unwrap(),
         };
         for (lol, tft, expected) in cases {
+            let fetcher = RankFetcher {
+                client: fetcher.client.clone(),
+                renewal: Arc::default(),
+            };
             assert_eq!(
                 fetcher
-                    .fetch_profiles(&format!("http://{address}/lol"), &format!("http://{address}/tft"))
+                    .fetch_profiles(
+                        &format!("http://{address}/lol"),
+                        &format!("http://{address}/tft"),
+                        "kr",
+                        RefreshMode::Manual
+                    )
                     .riot_id_not_found,
                 expected,
                 "LoL={lol}, TFT={tft}"
@@ -638,6 +834,7 @@ mod tests {
             }
         });
         let fetcher = RankFetcher {
+            renewal: Arc::default(),
             client: reqwest::blocking::Client::builder()
                 .no_proxy()
                 .timeout(Duration::from_secs(5))
@@ -647,7 +844,11 @@ mod tests {
         let url = format!("http://{address}/{account_id}?password={password}");
         let logs = logging::capture(|| {
             for _ in 0..4 {
-                let info = fetcher.fetch_rank_from_url(&url);
+                let fetcher = RankFetcher {
+                    client: fetcher.client.clone(),
+                    renewal: Arc::default(),
+                };
+                let info = fetcher.fetch_rank_from_url(&url, "kr", RefreshMode::Manual);
                 assert_eq!(info.tier, "Error");
                 assert_eq!(info.riot_id_not_found, None);
             }

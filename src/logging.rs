@@ -42,8 +42,19 @@ pub enum Event {
     RankWorkerPanicked,
     ShortcutInstallFailed,
     ClipboardFailed,
-    AutoTypeFailed,
+    LoginStarted,
+    LoginProgress,
+    LoginWaiting,
+    LoginCompleted,
+    LoginFailed,
+    LoginCancelled,
     LogFolderOpenFailed,
+    UpdateCheckFailed,
+    UpdateDownloaded,
+    UpdateVerificationFailed,
+    UpdateInstalled,
+    UpdateFailed,
+    UpdateRestarted,
     Panic,
 }
 
@@ -73,8 +84,19 @@ impl Event {
             Self::RankWorkerPanicked => "rank_worker_panicked",
             Self::ShortcutInstallFailed => "shortcut_install_failed",
             Self::ClipboardFailed => "clipboard_failed",
-            Self::AutoTypeFailed => "auto_type_failed",
+            Self::LoginStarted => "login_started",
+            Self::LoginProgress => "login_progress",
+            Self::LoginWaiting => "login_waiting",
+            Self::LoginCompleted => "login_completed",
+            Self::LoginFailed => "login_failed",
+            Self::LoginCancelled => "login_cancelled",
             Self::LogFolderOpenFailed => "log_folder_open_failed",
+            Self::UpdateCheckFailed => "update_check_failed",
+            Self::UpdateDownloaded => "update_downloaded",
+            Self::UpdateVerificationFailed => "update_verification_failed",
+            Self::UpdateInstalled => "update_installed",
+            Self::UpdateFailed => "update_failed",
+            Self::UpdateRestarted => "update_restarted",
             Self::Panic => "panic",
         }
     }
@@ -83,9 +105,17 @@ impl Event {
         match self {
             Self::SessionStarted
             | Self::SessionEnded
+            | Self::LoginStarted
+            | Self::LoginProgress
+            | Self::LoginWaiting
+            | Self::LoginCompleted
+            | Self::LoginCancelled
             | Self::RankRefreshStarted
             | Self::RankRefreshCompleted
-            | Self::AutoRefreshStarted => "INFO",
+            | Self::AutoRefreshStarted
+            | Self::UpdateDownloaded
+            | Self::UpdateInstalled
+            | Self::UpdateRestarted => "INFO",
             _ => "ERROR",
         }
     }
@@ -94,6 +124,44 @@ impl Event {
 /// Safe categories, deliberately excluding raw messages and arbitrary codes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Reason {
+    ConnectRenderer,
+    RendererFailed,
+    AuthRejected,
+    CaptchaRejected,
+    RiotClient,
+    PreviousWindow,
+    CloseLeague,
+    OpenClient,
+    WaitAuth,
+    AuthUnavailable,
+    AuthStarting,
+    AuthInteraction,
+    AuthIdentityPending,
+    LoginFormReady,
+    GameIdentityPending,
+    GameProcessPending,
+    LaunchRejected,
+    SignOut,
+    FindWindow,
+    Focus,
+    Type,
+    Confirm,
+    LaunchGame,
+    Done,
+    SignedIn,
+    Typed,
+    AlreadySignedIn,
+    ClientMissing,
+    LaunchFailed,
+    SignOutFailed,
+    TypingFailed,
+    Cancelled,
+    LeagueRunning,
+    CloseFailed,
+    GameLaunchFailed,
+    AccountMismatch,
+    AccountBanned,
+    WorkerPanicked,
     None,
     PermissionDenied,
     NotFound,
@@ -112,12 +180,52 @@ pub enum Reason {
     HttpOther,
     ResponseBody,
     ProfileMissing,
+    Checksum,
+    VersionMismatch,
     Other,
 }
 
 impl Reason {
     fn code(self) -> &'static str {
         match self {
+            Self::ConnectRenderer => "connect_renderer",
+            Self::RendererFailed => "renderer_failed",
+            Self::AuthRejected => "auth_rejected",
+            Self::CaptchaRejected => "captcha_rejected",
+            Self::RiotClient => "riot_client",
+            Self::PreviousWindow => "previous_window",
+            Self::CloseLeague => "close_league",
+            Self::OpenClient => "open_client",
+            Self::WaitAuth => "wait_auth",
+            Self::AuthUnavailable => "auth_unavailable",
+            Self::AuthStarting => "auth_starting",
+            Self::AuthInteraction => "auth_interaction",
+            Self::AuthIdentityPending => "auth_identity_pending",
+            Self::LoginFormReady => "login_form_ready",
+            Self::GameIdentityPending => "game_identity_pending",
+            Self::GameProcessPending => "game_process_pending",
+            Self::LaunchRejected => "launch_rejected",
+            Self::SignOut => "sign_out",
+            Self::FindWindow => "find_window",
+            Self::Focus => "focus",
+            Self::Type => "type",
+            Self::Confirm => "confirm",
+            Self::LaunchGame => "launch_game",
+            Self::Done => "done",
+            Self::SignedIn => "signed_in",
+            Self::Typed => "typed",
+            Self::AlreadySignedIn => "already_signed_in",
+            Self::ClientMissing => "client_missing",
+            Self::LaunchFailed => "launch_failed",
+            Self::SignOutFailed => "sign_out_failed",
+            Self::TypingFailed => "typing_failed",
+            Self::Cancelled => "cancelled",
+            Self::LeagueRunning => "league_running",
+            Self::CloseFailed => "close_failed",
+            Self::GameLaunchFailed => "game_launch_failed",
+            Self::AccountMismatch => "account_mismatch",
+            Self::AccountBanned => "account_banned",
+            Self::WorkerPanicked => "worker_panicked",
             Self::None => "none",
             Self::PermissionDenied => "permission_denied",
             Self::NotFound => "not_found",
@@ -136,6 +244,8 @@ impl Reason {
             Self::HttpOther => "http_other",
             Self::ResponseBody => "response_body",
             Self::ProfileMissing => "profile_missing",
+            Self::Checksum => "checksum",
+            Self::VersionMismatch => "version_mismatch",
             Self::Other => "other",
         }
     }

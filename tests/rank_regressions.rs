@@ -2,6 +2,132 @@ use leagueaccounts::rank_fetcher::RankFetcher;
 use scraper::Html;
 
 #[test]
+fn captured_public_profiles_parse_current_rank_history_and_level_offline() {
+    let fetcher = RankFetcher::default();
+    let ranked = fetcher
+        .parse_profile(include_str!("fixtures/opgg-ranked.html"))
+        .unwrap();
+    assert_eq!(ranked.tier, "Challenger");
+    assert_eq!(ranked.lp, "2210");
+    assert_eq!(ranked.level, "945");
+    assert_eq!(ranked.reached_last_season, "Challenger 1255LP");
+    assert_eq!(ranked.finished_last_season, "Master 285LP");
+    let unranked = fetcher
+        .parse_profile(include_str!("fixtures/opgg-unranked.html"))
+        .unwrap();
+    assert_eq!(unranked.tier, "Unranked");
+    assert_eq!(unranked.level, "83");
+    assert_eq!(
+        fetcher.parse_tft_from_opgg("{\"entry\":{truncated").tier,
+        "Error"
+    );
+}
+
+#[test]
+fn failed_fetch_preserves_last_known_ranks_and_serializes_provenance() {
+    use leagueaccounts::models::{
+        Account, Freshness, RankFetchError, RankInfo, RankProvenance, TftRank,
+    };
+    let mut account = Account {
+        tier: "Diamond".into(),
+        division: "II".into(),
+        lp: "57".into(),
+        level: "400".into(),
+        tft: TftRank {
+            tier: "Master".into(),
+            lp: "200".into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    RankInfo {
+        provenance: Some(RankProvenance {
+            source: "OP.GG".into(),
+            fetched_at: Some(100),
+            source_updated_at: Some(90),
+            freshness: Freshness::Stale,
+            error: Some(RankFetchError::RateLimited),
+            ..Default::default()
+        }),
+        ..RankInfo::error()
+    }
+    .apply_to(&mut account);
+    assert_eq!(
+        (&account.tier, &account.lp, &account.level),
+        (&"Diamond".into(), &"57".into(), &"400".into())
+    );
+    assert_eq!(account.tft.tier, "Master");
+    assert_eq!(account.tft.lp, "200");
+    let restored: Account =
+        serde_json::from_str(&serde_json::to_string(&account).unwrap()).unwrap();
+    assert_eq!(
+        restored.rank_provenance.unwrap().error,
+        Some(RankFetchError::RateLimited)
+    );
+    RankInfo {
+        tier: "Unranked".into(),
+        riot_id_not_found: Some(false),
+        ..RankInfo::unranked()
+    }
+    .apply_to(&mut account);
+    assert_eq!(account.tier, "Unranked");
+    assert!(account.lp.is_empty());
+}
+
+#[test]
+fn explicit_unranked_description_ignores_other_players_and_history_ranks() {
+    let body = r#"<meta name="description" content="Gumayusi#KR1 / Lv. 83"><img src="profile_icons/profileIcon6.jpg">{"tier_info":{"lp":99,"tier":"SILVER","label":"SILVER 1"}}"#;
+    let info = RankFetcher::new().parse_profile(body).unwrap();
+    assert_eq!(info.tier, "Unranked");
+    assert!(info.lp.is_empty());
+    assert_eq!(info.level, "83");
+    assert!(RankFetcher::new()
+        .parse_profile("<html>Just a moment...</html>")
+        .is_err());
+}
+
+#[test]
+fn unranked_profile_survives_description_wording_changes() {
+    // The profile icon is the guard against challenge pages; an unfamiliar
+    // description must not turn a real unranked profile into an error.
+    let body = r#"<meta name="description" content="Player#EUW - Level 83"><img src="profile_icons/profileIcon6.jpg">"#;
+    let info = RankFetcher::new().parse_profile(body).unwrap();
+    assert_eq!(info.tier, "Unranked");
+}
+
+#[test]
+fn tft_profile_without_history_is_unranked_not_error() {
+    let fetcher = RankFetcher::new();
+    for payload in ["profile_icons/profileIcon6.jpg", r#"{"entry":null}"#] {
+        let tft = fetcher.parse_tft_from_opgg(payload);
+        assert_eq!(tft.tier, "Unranked", "{payload}");
+        assert_eq!(tft.last_set, "Unranked", "{payload}");
+    }
+}
+
+#[test]
+fn failure_keeps_legacy_unranked_standings_saved_without_provenance() {
+    use leagueaccounts::models::{Account, RankInfo, TftRank};
+    let mut legacy = Account {
+        tier: "Unranked".into(),
+        level: "83".into(),
+        tft: TftRank::default(),
+        ..Default::default()
+    };
+    RankInfo::error().apply_to(&mut legacy);
+    assert_eq!(legacy.tier, "Unranked");
+    assert_eq!(legacy.tft.tier, "Unranked");
+
+    let mut never_fetched = Account {
+        tier: "Unranked".into(),
+        ..Default::default()
+    };
+    RankInfo::error().apply_to(&mut never_fetched);
+    assert_eq!(never_fetched.tier, "Error");
+    assert_eq!(never_fetched.tft.tier, "Error");
+}
+
+#[test]
 fn missing_riot_id_does_not_attempt_a_profile_lookup() {
     let account = leagueaccounts::models::Account {
         name: "   ".into(),

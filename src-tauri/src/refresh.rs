@@ -1,16 +1,19 @@
 //! Shared state, persisted settings, rank refreshes and the auto-refresh
 //! scheduler.
 
+use crate::login_control::LoginControl;
+use crate::updater::Updater;
 use crate::views::{account_view, fail, fail_with, AppError, Key};
 use leagueaccounts::history::RankHistory;
 use leagueaccounts::logging::{self, Event, Reason};
 use leagueaccounts::models::{Account, RankInfo};
+use leagueaccounts::rank_fetcher::RefreshMode;
 use leagueaccounts::utils::sort_accounts;
 use leagueaccounts::AccountManager;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicU64};
+use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -30,8 +33,15 @@ pub struct Settings {
     pub login_method: LoginMethod,
     /// Launch the game for the current mode after signing in.
     pub launch_game: bool,
-    /// Check GitHub for new releases.
-    pub check_updates: bool,
+    /// Check for and install new releases automatically; when off, GitHub is
+    /// contacted only from Settings › Check now. Settings from before automatic
+    /// updates stored this as "check for updates".
+    #[serde(alias = "checkUpdates")]
+    pub auto_update: bool,
+    /// A release whose executable reported an older version than the release.
+    /// It is never installed automatically, so it cannot update in a loop.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mislabeled_release: Option<String>,
     /// Unix ms of the last completed full refresh (manual or automatic).
     pub last_full_refresh: u64,
 }
@@ -52,7 +62,8 @@ impl Default for Settings {
             start_minimized: false,
             login_method: LoginMethod::Riot,
             launch_game: true,
-            check_updates: true,
+            auto_update: true,
+            mislabeled_release: None,
             last_full_refresh: 0,
         }
     }
@@ -93,7 +104,8 @@ pub struct Shared {
     pub settings_path: Option<PathBuf>,
     pub refresh_running: Mutex<bool>,
     pub clipboard_generation: AtomicU64,
-    pub login_cancel: AtomicBool,
+    pub login: Arc<LoginControl>,
+    pub updater: Updater,
     pub load_error: Option<AppError>,
 }
 
@@ -130,6 +142,8 @@ pub fn schedule(shared: &Shared) -> Schedule {
 pub enum RefreshKind {
     /// Full refresh requested from the UI.
     Manual,
+    /// Explicit user request; still respects provider cooldowns.
+    Force,
     /// Full refresh started by the scheduler.
     Auto,
     /// A few accounts after adding or renaming them.
@@ -202,7 +216,11 @@ pub fn start_refresh(app: AppHandle, shared: Arc<Shared>, accounts: Vec<Account>
                     let job = queue.lock().ok().and_then(|mut queue| queue.pop_front());
                     let Some(account) = job else { break };
                     let info = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        provider.fetch_rank(&account)
+                        provider.fetch_rank_with_mode(&account, match kind {
+                            RefreshKind::Auto => RefreshMode::Auto,
+                            RefreshKind::Force => RefreshMode::Force,
+                            _ => RefreshMode::Manual,
+                        })
                     }))
                     .unwrap_or_else(|_| {
                         logging::record(Event::RankWorkerPanicked, Reason::None);
@@ -295,21 +313,20 @@ pub fn spawn_scheduler(app: AppHandle, shared: Arc<Shared>) {
     });
 }
 
-/// Check for a newer release shortly after start and then every few hours,
-/// emitting `update-available` when one exists.
-pub fn spawn_update_checker(app: AppHandle, shared: Arc<Shared>) {
-    thread::spawn(move || {
-        thread::sleep(Duration::from_secs(20));
-        loop {
-            let enabled = shared.settings.lock().map(|s| s.check_updates).unwrap_or(false);
-            if enabled {
-                if let Ok(Some(release)) = leagueaccounts::updates::latest_release() {
-                    if leagueaccounts::updates::is_newer(&release.version, env!("CARGO_PKG_VERSION")) {
-                        let _ = app.emit("update-available", release);
-                    }
-                }
-            }
-            thread::sleep(Duration::from_secs(6 * 60 * 60));
-        }
-    });
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn automatic_updates_default_on_and_keep_an_earlier_opt_out() {
+        let parse = |json: &str| serde_json::from_str::<Settings>(json).unwrap().auto_update;
+        assert!(parse("{}"));
+        assert!(!parse(r#"{"checkUpdates":false}"#));
+        assert!(!parse(r#"{"autoUpdate":false}"#));
+        let saved = serde_json::to_string(&Settings::default()).unwrap();
+        assert!(saved.contains(r#""autoUpdate":true"#) && !saved.contains("checkUpdates"));
+        assert!(!saved.contains("mislabeledRelease"));
+        let skipped: Settings = serde_json::from_str(r#"{"mislabeledRelease":"3.1.0"}"#).unwrap();
+        assert_eq!(skipped.mislabeled_release.as_deref(), Some("3.1.0"));
+    }
 }

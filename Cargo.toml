@@ -3,7 +3,7 @@ members = ["src-tauri"]
 
 [package]
 name = "leagueaccounts"
-version = "3.3.0"
+version = "3.4.0"
 edition = "2021"
 description = "League of Legends account manager for Windows"
 license = "MIT"
@@ -17,14 +17,16 @@ reqwest = { version = "0.12", default-features = false, features = ["blocking", 
 scraper = "0.24"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+sha2 = "0.10"
+tempfile = "3.23"
+time = { version = "0.3", features = ["parsing", "formatting"] }
+tungstenite = { version = "0.28", default-features = false, features = ["handshake"] }
 urlencoding = "2.1"
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_Security_Credentials",
+    "Win32_System_JobObjects",
     "Win32_System_Threading",
     "Win32_UI_Input_KeyboardAndMouse",
     "Win32_UI_WindowsAndMessaging",
 ] }
-
-[dev-dependencies]
-tempfile = "3.23"

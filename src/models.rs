@@ -31,6 +31,28 @@ pub struct Account {
     /// Teamfight Tactics ranked standing for the same Riot account.
     #[serde(default)]
     pub tft: TftRank,
+    /// LoL source freshness; TFT has its own independent fetch state.
+    #[serde(default)]
+    pub rank_provenance: Option<RankProvenance>,
+    #[serde(default)]
+    pub tft_provenance: Option<RankProvenance>,
+    /// League suspension Riot reported at the last sign-in through the app.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ban: Option<Ban>,
+}
+
+/// A League suspension read from Riot's account information.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct Ban {
+    /// Unix milliseconds when the suspension ends; `None` when permanent.
+    pub until: Option<u64>,
+}
+
+impl Ban {
+    pub fn active(&self, now_millis: u64) -> bool {
+        self.until.is_none_or(|until| until > now_millis)
+    }
 }
 
 /// Ranked TFT standing: the current set and the previous set's final rank.
@@ -104,6 +126,44 @@ pub struct RankInfo {
     pub finished_last_season: String,
     /// `None` when the TFT profile could not be fetched.
     pub tft: Option<TftRank>,
+    pub provenance: Option<RankProvenance>,
+    pub tft_provenance: Option<RankProvenance>,
+}
+
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Freshness {
+    Fresh,
+    Stale,
+    #[default]
+    Unknown,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RankFetchError {
+    ProfileNotFound,
+    RateLimited,
+    ProviderUnavailable,
+    ParsingFailed,
+    Forbidden,
+    Timeout,
+    RenewalFailed,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default, rename_all = "camelCase")]
+pub struct RankProvenance {
+    pub source: String,
+    /// Unix milliseconds; never substitute fetch time for source update time.
+    pub fetched_at: Option<u64>,
+    pub source_updated_at: Option<u64>,
+    pub freshness: Freshness,
+    /// Unix milliseconds after which a fresh source turns stale.
+    pub fresh_until: Option<u64>,
+    pub renewal_attempted: bool,
+    pub renewal_succeeded: bool,
+    pub error: Option<RankFetchError>,
 }
 
 impl RankInfo {
@@ -117,6 +177,7 @@ impl RankInfo {
             reached_last_season: "Unranked".to_owned(),
             finished_last_season: "Unranked".to_owned(),
             tft: Some(TftRank::default()),
+            ..Self::default()
         }
     }
 
@@ -130,31 +191,63 @@ impl RankInfo {
             reached_last_season: "...".to_owned(),
             finished_last_season: "...".to_owned(),
             tft: None,
+            ..Self::default()
         }
     }
 
     pub fn apply_to(&self, account: &mut Account) {
+        // Accounts saved before provenance existed have a level from a past fetch.
+        let fetched_before = account.rank_provenance.is_some() || !account.level.is_empty();
+        let tft_fetched_before = fetched_before || account.tft_provenance.is_some();
         if let Some(not_found) = self.riot_id_not_found {
             account.riot_id_not_found = not_found;
         }
-        account.tier = if self.tier.is_empty() {
-            "Unranked".to_owned()
+        // A failed request must not replace the last known standing with Unranked.
+        if self.tier != "Error" || self.riot_id_not_found == Some(true) {
+            account.tier = if self.tier.is_empty() {
+                "Unranked".to_owned()
+            } else {
+                self.tier.clone()
+            };
+            account.division = self.division.clone();
+            account.lp = self.lp.clone();
+            account.level = self.level.clone();
+            account.reached_last_season = if self.reached_last_season.is_empty() {
+                "N/A".to_owned()
+            } else {
+                self.reached_last_season.clone()
+            };
+            account.finished_last_season = if self.finished_last_season.is_empty() {
+                "N/A".to_owned()
+            } else {
+                self.finished_last_season.clone()
+            };
+        } else if !fetched_before && (account.tier.is_empty() || account.tier == "Unranked") {
+            // No successful fetch yet: show Error rather than an invented standing.
+            account.tier = "Error".to_owned();
+        }
+        if let Some(tft) = &self.tft {
+            account.tft = tft.clone();
+        } else if !tft_fetched_before && account.tft.tier == "Unranked" {
+            account.tft = TftRank::error();
+        }
+        if self.tier == "Error" && self.provenance.is_none() {
+            let provenance = account
+                .rank_provenance
+                .get_or_insert_with(RankProvenance::default);
+            provenance.error = Some(RankFetchError::ProviderUnavailable);
+            provenance.freshness = Freshness::Stale;
         } else {
-            self.tier.clone()
-        };
-        account.division = self.division.clone();
-        account.lp = self.lp.clone();
-        account.level = self.level.clone();
-        account.reached_last_season = if self.reached_last_season.is_empty() {
-            "N/A".to_owned()
+            account.rank_provenance = self.provenance.clone();
+        }
+        if self.tft.is_none() && self.tft_provenance.is_none() {
+            let provenance = account
+                .tft_provenance
+                .get_or_insert_with(RankProvenance::default);
+            provenance.error = Some(RankFetchError::ProviderUnavailable);
+            provenance.freshness = Freshness::Stale;
         } else {
-            self.reached_last_season.clone()
-        };
-        account.finished_last_season = if self.finished_last_season.is_empty() {
-            "N/A".to_owned()
-        } else {
-            self.finished_last_season.clone()
-        };
-        account.tft = self.tft.clone().unwrap_or_else(TftRank::error);
+            account.tft_provenance = self.tft_provenance.clone();
+        }
     }
 }

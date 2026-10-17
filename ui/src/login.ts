@@ -5,15 +5,18 @@ import { accountLabel, type AccountView, type LoginStep } from "./api";
 import { $, esc, fragment, leave } from "./dom";
 import { t, type MessageKey } from "./i18n";
 import { icon } from "./icons";
+import { hextechLoader } from "./loader";
 import { emblem } from "./ranks";
 
-type StepState = "pending" | "active" | "done" | "skipped" | "error";
+type StepState = "pending" | "active" | "done" | "error";
 
 const LABELS: Record<LoginStep, MessageKey> = {
   closeLeague: "login.step.closeLeague",
   openClient: "login.step.openClient",
   waitAuth: "login.step.waitAuth",
   signOut: "login.step.signOut",
+  connect: "login.step.connect",
+  verification: "login.step.verification",
   findWindow: "login.step.findWindow",
   focus: "login.step.focus",
   type: "login.step.type",
@@ -26,7 +29,7 @@ export interface LoginOverlay {
   step(step: LoginStep): void;
   succeed(title: string, detail: string): void;
   finishInClient(): void;
-  fail(message: string): void;
+  fail(message: string, title?: string): void;
   close(): void;
 }
 
@@ -35,7 +38,6 @@ export function openLoginOverlay(options: {
   tier: string;
   viaRiot: boolean;
   closeLeague: boolean;
-  switchAccount: boolean;
   launchGame: boolean;
   onCancel: () => void;
 }): LoginOverlay {
@@ -44,9 +46,9 @@ export function openLoginOverlay(options: {
         ...(options.closeLeague ? (["closeLeague"] as LoginStep[]) : []),
         "openClient",
         "waitAuth",
-        ...(options.switchAccount ? (["signOut"] as LoginStep[]) : []),
+        "signOut",
+        "connect",
         "findWindow",
-        "focus",
         "type",
         "confirm",
         ...(options.launchGame ? (["launchGame"] as LoginStep[]) : []),
@@ -59,13 +61,16 @@ export function openLoginOverlay(options: {
   const overlay = fragment(`
     <div class="login-overlay" role="dialog" aria-modal="true" aria-live="polite" tabindex="-1">
       <div class="login-stage">
+        <div class="login-identity">
         <div class="login-orbit">
-          <span class="ring ring-1"></span><span class="ring ring-2"></span><span class="ring ring-3"></span>
-          <div class="login-emblem">${emblem(options.tier, 104)}</div>
+          <div class="login-loader" aria-hidden="true"></div>
+          <div class="login-emblem" hidden>${emblem(options.tier, 240, document.documentElement.dataset.mode === "tft" ? "tft" : "lol")}</div>
         </div>
         <h2 class="login-title">${esc(t("login.title"))}</h2>
         <p class="login-account">${esc(accountLabel(options.account))}</p>
-        <div class="login-progress"><span></span></div>
+        </div>
+        <div class="login-details">
+        <div class="login-progress" role="progressbar" aria-label="${esc(t("login.title"))}" aria-valuemin="0" aria-valuemax="${steps.length}" aria-valuenow="0"><span></span></div>
         <ol class="login-steps">
           ${steps
             .map(
@@ -80,9 +85,20 @@ export function openLoginOverlay(options: {
           <button class="btn btn-ghost" data-login="cancel">${esc(t("common.cancel"))}</button>
           <button class="btn btn-primary" data-login="close" hidden>${esc(t("common.close"))}</button>
         </div>
+        </div>
       </div>
     </div>`);
   $("#modal-root").append(overlay);
+  const progress = $(".login-progress", overlay);
+  // The client's loading animation plays while signing in; the crest replaces it with the result.
+  let stopLoader: (() => void) | null = hextechLoader($(".login-loader", overlay));
+  const showCrest = () => {
+    if (!stopLoader) return;
+    stopLoader();
+    stopLoader = null;
+    $(".login-loader", overlay).remove();
+    $(".login-emblem", overlay).hidden = false;
+  };
 
   const render = () => {
     let done = 0;
@@ -95,20 +111,24 @@ export function openLoginOverlay(options: {
         pending: "",
         active: "",
         done: icon("check", 13),
-        skipped: icon("minus", 13),
         error: icon("x", 13),
       };
       $(".step-icon", item).innerHTML = icons[state];
     });
     steps.forEach((step) => {
-      if (states.get(step) === "done" || states.get(step) === "skipped") done++;
+      if (states.get(step) === "done") done++;
     });
-    $(".login-progress span", overlay).style.width = `${(done / steps.length) * 100}%`;
+    progress.style.setProperty("--login-progress", String(done / steps.length));
+    progress.setAttribute("aria-valuenow", String(done));
+    const current = steps.find(step => states.get(step) === "active");
+    progress.setAttribute("aria-valuetext", current ? label(current) : t(done === steps.length ? "login.step.done" : "login.title"));
   };
 
   // The result stays on screen until the user closes it.
   const finish = (kind: "success" | "info" | "error", message: string) => {
+    showCrest();
     overlay.classList.add(`is-${kind}`);
+    progress.setAttribute("aria-valuetext", $(".login-title", overlay).textContent ?? "");
     const text = $(".login-message", overlay);
     text.textContent = message;
     text.hidden = !message;
@@ -120,11 +140,16 @@ export function openLoginOverlay(options: {
 
   const api: LoginOverlay = {
     step(step) {
+      const message = $(".login-message", overlay);
+      message.hidden = step !== "verification";
+      if (step === "verification") {
+        message.textContent = t("login.step.verification");
+        progress.setAttribute("aria-valuetext", message.textContent);
+        return;
+      }
       if (step === "done") {
         steps.forEach((candidate) => {
-          const state = states.get(candidate);
-          if (state === "active") states.set(candidate, "done");
-          if (state === "pending") states.set(candidate, "skipped");
+          if (states.get(candidate) !== "error") states.set(candidate, "done");
         });
         render();
         return;
@@ -133,10 +158,9 @@ export function openLoginOverlay(options: {
       const index = steps.indexOf(step);
       steps.forEach((candidate, position) => {
         const state = states.get(candidate);
-        if (position < index) {
-          if (state === "active") states.set(candidate, "done");
-          if (state === "pending") states.set(candidate, "skipped");
-        }
+        // Steps passed over (such as signing out when nobody was signed in) count as done.
+        if (position < index && state !== "error") states.set(candidate, "done");
+        if (position > index) states.set(candidate, "pending");
       });
       states.set(step, "active");
       render();
@@ -154,15 +178,16 @@ export function openLoginOverlay(options: {
       $(".login-title", overlay).textContent = t("login.finishTitle");
       finish("info", t("toast.finishSignIn"));
     },
-    fail(message) {
+    fail(message, title = t("login.failed")) {
       steps.forEach((step) => {
         if (states.get(step) === "active") states.set(step, "error");
       });
       render();
-      $(".login-title", overlay).textContent = t("login.failed");
+      $(".login-title", overlay).textContent = title;
       finish("error", message);
     },
     close() {
+      showCrest();
       document.removeEventListener("keydown", onKey, true);
       if (overlay.isConnected) void leave(overlay, "login-out");
     },

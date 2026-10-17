@@ -1,0 +1,516 @@
+{
+  "patch": "16.20",
+  "copyright": "Riot Games, Inc. All rights reserved. See THIRD_PARTY_ASSETS.md.",
+  "assets": [
+    {
+      "file": "ranks/iron.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/ranked-emblem/emblem-iron.png",
+      "bytes": 36989,
+      "sha256": "c453391cd7c8b5b5db4b0d753bf81d6168bcb3c81246961add83b7e7f01c4230"
+    },
+    {
+      "file": "ranks/bronze.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/ranked-emblem/emblem-bronze.png",
+      "bytes": 61626,
+      "sha256": "253003087e8c10cb6fffd5c33cc06d31d7b45917bb0ca634e8c951deb39c36f3"
+    },
+    {
+      "file": "ranks/silver.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/ranked-emblem/emblem-silver.png",
+      "bytes": 102717,
+      "sha256": "e71dc2b8ccf5673f4a65b9db95657bbf9e2b880b24112a6fac71b6492f1d99de"
+    },
+    {
+      "file": "ranks/gold.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/ranked-emblem/emblem-gold.png",
+      "bytes": 90452,
+      "sha256": "23a35bc7d693de49e049749c2f0d0921f2c8e7c65181d615e58a2ab6e3a47b77"
+    },
+    {
+      "file": "ranks/platinum.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/ranked-emblem/emblem-platinum.png",
+      "bytes": 249115,
+      "sha256": "75af4a0c4e16d343761098a0b706aa086b7083b84af93401ca1e3f1c1a556340"
+    },
+    {
+      "file": "ranks/emerald.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/ranked-emblem/emblem-emerald.png",
+      "bytes": 251487,
+      "sha256": "69d218bdc84c51c1eada2edd399b8b245df0c0d80c19f54f6c9e72dfe9afcd1c"
+    },
+    {
+      "file": "ranks/diamond.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/ranked-emblem/emblem-diamond.png",
+      "bytes": 82008,
+      "sha256": "24ef7b706ab6bf9c4ba508b830317e1a2efd82fa9c69d710bfc4c01b7d6fab1f"
+    },
+    {
+      "file": "ranks/master.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/ranked-emblem/emblem-master.png",
+      "bytes": 92028,
+      "sha256": "22118c65f4d0ee3e2776067ba57e295a566010705e8b80b6e2ba3e5191b8d287"
+    },
+    {
+      "file": "ranks/grandmaster.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/ranked-emblem/emblem-grandmaster.png",
+      "bytes": 110760,
+      "sha256": "cb016209c335961cc56469a97c0a3cdc9c7203d13546e766e87f76523f9196c0"
+    },
+    {
+      "file": "ranks/challenger.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/ranked-emblem/emblem-challenger.png",
+      "bytes": 111694,
+      "sha256": "a0bce03a7c884d9342eed3a674a9ec27bd0881d45565a9ed1fa34c0a27196b56"
+    },
+    {
+      "file": "ranks/unranked.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-shared-components/global/default/unranked.png",
+      "bytes": 8506,
+      "sha256": "61fe51ce1fa9fd83acbbbcd8c88bb78f8a0ca350551d0cc9dcffd91e32f89066"
+    },
+    {
+      "file": "crests/iron.svg",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/ranked-mini-crests/iron.svg",
+      "bytes": 1440,
+      "sha256": "207c76b236c5bdd238d2d05314a9b505b573ad9aff732ff2c251f87ee9792208"
+    },
+    {
+      "file": "crests/iron-tft.svg",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/ranked-mini-crests/iron_tft.svg",
+      "bytes": 2082,
+      "sha256": "746e095d4e2a7c26c38d76b5379bb691aa97ec77bc2f2610dcbfbe40fc37b039"
+    },
+    {
+      "file": "crests/bronze.svg",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/ranked-mini-crests/bronze.svg",
+      "bytes": 1404,
+      "sha256": "272c4e2bed1908fba19ae61795752d7343332377cf7fdea44657a0754951429e"
+    },
+    {
+      "file": "crests/bronze-tft.svg",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/ranked-mini-crests/bronze_tft.svg",
+      "bytes": 2007,
+      "sha256": "d16d4f8d412b30041e425f960f0015a3a6f48e1475c3d0d2673869e8c0bba3f3"
+    },
+    {
+      "file": "crests/silver.svg",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/ranked-mini-crests/silver.svg",
+      "bytes": 1401,
+      "sha256": "249a586ddfe5151f9bf7d3bfde2cc72bc4d49ff3dc2d34b2132ab4e1fd620a13"
+    },
+    {
+      "file": "crests/silver-tft.svg",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/ranked-mini-crests/silver_tft.svg",
+      "bytes": 2071,
+      "sha256": "0926afc6bd1d9a69ae4d5212f40c08d00a5540379167c3afd839ce257a401f23"
+    },
+    {
+      "file": "crests/gold.svg",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/ranked-mini-crests/gold.svg",
+      "bytes": 1673,
+      "sha256": "52820a6f7f5d2d990a1790756ee7458bb7e000694403009ff2e1bf20d35484f3"
+    },
+    {
+      "file": "crests/gold-tft.svg",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/ranked-mini-crests/gold_tft.svg",
+      "bytes": 2205,
+      "sha256": "be4b15cdced92e59d0b565b90eb0cba65ba4c8c8b1283bcd64c383588cc45bec"
+    },
+    {
+      "file": "crests/platinum.svg",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/ranked-mini-crests/platinum.svg",
+      "bytes": 1662,
+      "sha256": "4378f64bc950050a3103b1d8d35533bdc229cbd3e1c30353b269f318b2221435"
+    },
+    {
+      "file": "crests/platinum-tft.svg",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/ranked-mini-crests/platinum_tft.svg",
+      "bytes": 2199,
+      "sha256": "d97d062e0a8b8b72ab94a12c3edcac6443e0149d03067c566ff985332dc03ef7"
+    },
+    {
+      "file": "crests/emerald.svg",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/ranked-mini-crests/emerald.svg",
+      "bytes": 1794,
+      "sha256": "372fd16a8e91f4956811a23f0ec0659521f125f73b17de7cfd9d2f70bbd2d582"
+    },
+    {
+      "file": "crests/emerald-tft.svg",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/ranked-mini-crests/emerald_tft.svg",
+      "bytes": 2007,
+      "sha256": "0348959af9923a8fb54fb986aa172225ed18449fc5cd3de40495aa78d2de0f69"
+    },
+    {
+      "file": "crests/diamond.svg",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/ranked-mini-crests/diamond.svg",
+      "bytes": 1838,
+      "sha256": "e6208444e744b67a6352ee42866d21cfae6ec52c1b903ca77b60843e2490a446"
+    },
+    {
+      "file": "crests/diamond-tft.svg",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/ranked-mini-crests/diamond_tft.svg",
+      "bytes": 2267,
+      "sha256": "31378098cbfaff66fe60ea72f8911d13bea56653d21afc81bca73feeedf4970e"
+    },
+    {
+      "file": "crests/master.svg",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/ranked-mini-crests/master.svg",
+      "bytes": 2256,
+      "sha256": "19184e27964a412b1d26fcf93bc284002a384124397ea2a28e8636c5ba576791"
+    },
+    {
+      "file": "crests/master-tft.svg",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/ranked-mini-crests/master_tft.svg",
+      "bytes": 2525,
+      "sha256": "f6e63910e45fd4a002c00fd6ca4cb687a47f26259a74f5b5e26b618412d5cb24"
+    },
+    {
+      "file": "crests/grandmaster.svg",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/ranked-mini-crests/grandmaster.svg",
+      "bytes": 2256,
+      "sha256": "4628ea3bece62b93a4ca5f72d76e9bd11cd2ed3c38c30fe39fb7813ba276b2d5"
+    },
+    {
+      "file": "crests/grandmaster-tft.svg",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/ranked-mini-crests/grandmaster_tft.svg",
+      "bytes": 2533,
+      "sha256": "2325aa0786e2a0cff1ca4c55a537eec77365095d24ae3fee47ebfc5a71fe151d"
+    },
+    {
+      "file": "crests/challenger.svg",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/ranked-mini-crests/challenger.svg",
+      "bytes": 2256,
+      "sha256": "90e7ee4e0c6369f1802a5d9646e883ab79922dd23ce4b9fe2fe502f4607b0b9e"
+    },
+    {
+      "file": "crests/challenger-tft.svg",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/ranked-mini-crests/challenger_tft.svg",
+      "bytes": 2525,
+      "sha256": "dd9d3b66acb4087a58290519170ef4e741334680496b68df7d02871a3c636adc"
+    },
+    {
+      "file": "crests/unranked.svg",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/ranked-mini-crests/unranked.svg",
+      "bytes": 908,
+      "sha256": "abc50dac0cf0f0fab16317a2169d71c4008f8c89fefbe867343b280e98e4ca17"
+    },
+    {
+      "file": "crests/unranked-tft.svg",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/ranked-mini-crests/unranked-tft.svg",
+      "bytes": 1885,
+      "sha256": "9be5dc658fbcfc65a9f25e77e3cf6ae338057dbb708bb85e09c800c36eff993f"
+    },
+    {
+      "file": "fonts/beaufort-medium.otf",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-typekit/global/default/fonts/beaufort/beaufortforlol-medium.otf",
+      "bytes": 76440,
+      "sha256": "0f9750f4f634b881e899e6fce81e2a7c82008cd6499e10a34a3a32611fa5e49f"
+    },
+    {
+      "file": "fonts/beaufort-regular.otf",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-typekit/global/default/fonts/beaufort/beaufortforlol-regular.otf",
+      "bytes": 74412,
+      "sha256": "2bcaf620e4574f0e8cacfacb44b823b31c10805f77f301197577e8309e3e2141"
+    },
+    {
+      "file": "fonts/beaufort-bold.otf",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-typekit/global/default/fonts/beaufort/beaufortforlol-bold.otf",
+      "bytes": 77588,
+      "sha256": "66d440d5621c6ba4711062a404233ead38a6546f18f4ea1a1aaa7ccdd5e03d29"
+    },
+    {
+      "file": "fonts/spiegel-regular.otf",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-typekit/global/default/fonts/spiegel/spiegel-regular.otf",
+      "bytes": 129956,
+      "sha256": "5045fb9071d990381ab82ffebc71fab1e86cc01b0a78597e7ec776192c0ec427"
+    },
+    {
+      "file": "fonts/spiegel-semibold.otf",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-typekit/global/default/fonts/spiegel/spiegel-semibold.otf",
+      "bytes": 131192,
+      "sha256": "442568c66aaa4abdba0159fc7868518e5668d48deb6f40fd1372f95a82c14576"
+    },
+    {
+      "file": "backgrounds/hextech.jpg",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/lcu-alpha-backdrop.jpg",
+      "bytes": 80057,
+      "sha256": "8a5e1f52833404e53c9956651fd9b3dcea6120b42509467fcac4ff154828b388"
+    },
+    {
+      "file": "backgrounds/collection.jpg",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/npe-rewards-background.jpg",
+      "bytes": 76549,
+      "sha256": "f1f2b43e50a306f8f4e1b9e4825e436f3eb92690ff3f92a15fa4d47b02e1d39a"
+    },
+    {
+      "file": "icons/empty-poro.svg",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/icon-search-empty-poro.svg",
+      "bytes": 3256,
+      "sha256": "a1388acd811a22927f33403e22b26594826344bb1ea5e280736e37c0827af3d9"
+    },
+    {
+      "file": "icons/profile.svg",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/nav-icon-profile.svg",
+      "bytes": 932,
+      "sha256": "6155ee32cb77dca268a72c741fdad3e0f5bf7e196d2bc85eb327a2523a823506"
+    },
+    {
+      "file": "icons/lol.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/lol_icon.png",
+      "bytes": 88356,
+      "sha256": "8f2b3dd12ca1ee785b77edc26690d333f93179160d108ffbe0f4c159896a0ccf"
+    },
+    {
+      "file": "icons/tft.svg",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-parties/global/default/tft-game-select-icon-default.svg",
+      "bytes": 1192,
+      "sha256": "9323418cb02ea36d5af9ee4a4e8fc1021b76da3877e280eca301b49ae912976e"
+    },
+    {
+      "file": "frame/sub-border-primary-horizontal.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-uikit/global/default/images/sub-border-primary-horizontal.png",
+      "bytes": 185,
+      "sha256": "dd8fe91b2d947f99beb8c9aaa84a6b10bef31028e386c26b5a0cf34ad4ca1a99"
+    },
+    {
+      "file": "frame/sub-border-secondary-horizontal.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-uikit/global/default/images/sub-border-secondary-horizontal.png",
+      "bytes": 174,
+      "sha256": "6fc71828928189bd21dfd8293318961c0fc239dc1e0294671212372a89669b6e"
+    },
+    {
+      "file": "frame/sub-border-primary-vertical.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-uikit/global/default/images/sub-border-primary-vertical.png",
+      "bytes": 184,
+      "sha256": "4cfbda465e25da1eb0b58ce522f0efb4186ac7e02cedab8e72373d8e6e1d29d0"
+    },
+    {
+      "file": "frame/sub-border-secondary-vertical.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-uikit/global/default/images/sub-border-secondary-vertical.png",
+      "bytes": 167,
+      "sha256": "8c0aa4ca278e32169fad391983cafeac566c6fc703832649d8a9c75a7e445af5"
+    },
+    {
+      "file": "frame/frame-button-close-top-down.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-uikit/global/default/images/frame-button-close-top-down.png",
+      "bytes": 7145,
+      "sha256": "115c2bf552c322c8408e03c68955654b8e956ad4e9adef16ee327c05edbb492e"
+    },
+    {
+      "file": "frame/x-icon.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-uikit/global/default/images/x-icon.png",
+      "bytes": 356,
+      "sha256": "28dbd782ac5bb0cda5406a9e4b038df69e8d4255d957b7f434754bb92ece6aa2"
+    },
+    {
+      "file": "frame/title_divider.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-uikit/global/default/images/title_divider.png",
+      "bytes": 207,
+      "sha256": "3cd1048a6c14595bc2f49a9f21ef4d71893813a3e5c2a7b6838209bac41d147a"
+    },
+    {
+      "file": "controls/checkbox-spritesheet.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-uikit/global/default/images/checkbox-spritesheet.png",
+      "bytes": 913,
+      "sha256": "d4d19e6838b99957633bdd13582ee48d6e66f5bcca8338f3db377c240ec9ec5b"
+    },
+    {
+      "file": "controls/up-down-arrow.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-uikit/global/default/images/up-down-arrow.png",
+      "bytes": 194,
+      "sha256": "01a83ef3cf61d3df05aefaa1ba845776c15630c40b6923051bbffb4aa00b4fb2"
+    },
+    {
+      "file": "controls/up-down-arrow-locked.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-uikit/global/default/images/up-down-arrow-locked.png",
+      "bytes": 304,
+      "sha256": "98486b979338b0e2df0daa078351860c2d3a82de398b3739373c14b9022b972d"
+    },
+    {
+      "file": "controls/dropdown-check.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-uikit/global/default/images/dropdown-check.png",
+      "bytes": 233,
+      "sha256": "fb456c856e8206f48d21492e7d99957a9edc901a20a978906b9c457af13c2695"
+    },
+    {
+      "file": "controls/nav-pointer.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-uikit/global/default/images/nav-pointer.png",
+      "bytes": 1612,
+      "sha256": "1a35f634ded1ed957f3d058787d5a0ab486c4f6026abe2546e76b5228d260cad"
+    },
+    {
+      "file": "controls/nav-highlight.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-uikit/global/default/images/nav-highlight.png",
+      "bytes": 9506,
+      "sha256": "709cae4606bab5704b33c4a02cac58dadcb3adeb8916ee7875c1f64005b992b7"
+    },
+    {
+      "file": "controls/sheen.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-uikit/global/default/images/sheen.png",
+      "bytes": 2264,
+      "sha256": "efb50969cff5e5e44a6598fe4a92750297269d68e23ef2b4f8780e42dfdce637"
+    },
+    {
+      "file": "icons/icon_copy.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-uikit/global/default/images/icon_copy.png",
+      "bytes": 216,
+      "sha256": "a63e87f0581fd1ad28e68f72ae607f72133af7e97e5c83edf139f973999ad414"
+    },
+    {
+      "file": "icons/icon_delete.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-uikit/global/default/images/icon_delete.png",
+      "bytes": 323,
+      "sha256": "fafff5547c212802a5bc0ddb6db74a428debc741ee54c65ee2c8842ec114658d"
+    },
+    {
+      "file": "icons/icon_edit.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-uikit/global/default/images/icon_edit.png",
+      "bytes": 833,
+      "sha256": "4ae2b726a379e041a1f3908628eff49229846f686e46d1afff42676535e1d3af"
+    },
+    {
+      "file": "icons/icon_import.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-uikit/global/default/images/icon_import.png",
+      "bytes": 4182,
+      "sha256": "f4754ea10e059f3bb17c8154d4d6030287a9f42678a43cb6adf27dc9fad6b388"
+    },
+    {
+      "file": "icons/icon_export.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-uikit/global/default/images/icon_export.png",
+      "bytes": 8985,
+      "sha256": "9b4343aea38f60f7d8e9d1df313bfbe2725da9a4002d8dc0b044e8dee92712a1"
+    },
+    {
+      "file": "icons/icon_plus.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-uikit/global/default/images/icon_plus.png",
+      "bytes": 136,
+      "sha256": "0971a9bbaa52bf48abc4aca3dac13c8aad654375e04b99349ef1dba1baaffd41"
+    },
+    {
+      "file": "icons/icon_remove.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-uikit/global/default/images/icon_remove.png",
+      "bytes": 138,
+      "sha256": "0e67e157b8d5db0d5357f67dafe6add2891feb2dbe105fe49efc586a203ea803"
+    },
+    {
+      "file": "icons/icon_settings.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-uikit/global/default/images/icon_settings.png",
+      "bytes": 830,
+      "sha256": "0ea48c46d6e25e31dd1f8b998f2859934edd022769fae84425cd8c7451c070c8"
+    },
+    {
+      "file": "icons/icon_next.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-uikit/global/default/images/icon_next.png",
+      "bytes": 425,
+      "sha256": "f52f1cba5e5dd833354fd6c1329748fd247a5c82e824bb43515c37c0942763b8"
+    },
+    {
+      "file": "icons/refresh.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-uikit/global/default/images/refresh.png",
+      "bytes": 1153,
+      "sha256": "101b2dfe626354f794923393afc726f03e8811c8cd4760aed0ec65c7597c83ca"
+    },
+    {
+      "file": "icons/external-link-mask.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-uikit/global/default/images/external-link-mask.png",
+      "bytes": 221,
+      "sha256": "ada43009b2ac8483628b52cf7b1f88b12c49fc4ba108c816eba29dbb94ee2212"
+    },
+    {
+      "file": "icons/ellipses.svg",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-uikit/global/default/images/ellipses.svg",
+      "bytes": 421,
+      "sha256": "03551237f567e05dd5b90e75ab041cbec65ffe91dcbc38929b3c7161bc7b1d83"
+    },
+    {
+      "file": "icons/preview.svg",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-uikit/global/default/images/preview.svg",
+      "bytes": 929,
+      "sha256": "661c3b1de1510dd9987edba8e0866fde2f66e2cab65d58446e56ec5ca77a212a"
+    },
+    {
+      "file": "icons/info-icon.svg",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-uikit/global/default/images/info-icon.svg",
+      "bytes": 775,
+      "sha256": "7b6cd369affe149b036212a88b160f01aefa6f5c0d21186cbf9f2f761ba909fa"
+    },
+    {
+      "file": "icons/attention-info.svg",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-uikit/global/default/images/attention-info.svg",
+      "bytes": 800,
+      "sha256": "db80ba5f8c94c76d4fdfba3800857a94161bbf06efd82464602d42acb30d3440"
+    },
+    {
+      "file": "icons/search.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/uikit/magnifying-glass-icon.png",
+      "bytes": 1149,
+      "sha256": "b8ad974652270ebd27594be4a8bb5dd7e6965c5fb4d124b0dc32a3839e40ef6c"
+    },
+    {
+      "file": "icons/check.svg",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/checkmark.svg",
+      "bytes": 302,
+      "sha256": "75958f4db8f2fe0fc1990d5c8f5fd3ce2c92505b76b3967ca9caaa6cf8c8f397"
+    },
+    {
+      "file": "icons/warning.svg",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/warning_icon.svg",
+      "bytes": 377,
+      "sha256": "15a96feb1a2dc851cf27b009d2107f8d0b47c69fa8e8f3e37c4a6b1f252642b9"
+    },
+    {
+      "file": "icons/clock.svg",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/hextech-ui-icons/clock.svg",
+      "bytes": 822,
+      "sha256": "9ad5f1480daba0013c34b13a9304001e1b9a9ac25b7c3de951f99d6f30414b73"
+    },
+    {
+      "file": "controls/spinner.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/spinner.png",
+      "bytes": 11757,
+      "sha256": "99faa43b372c3647563ce679d46db4ac7541e84e236cd0dbdd23a3bcf9e12960"
+    },
+    {
+      "file": "controls/radio.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-parties/global/default/btn_icon.png",
+      "bytes": 15834,
+      "sha256": "ccc8d301ea96cfc810dad1dec03e58258909c26b4735be6360c9309cfcd4cb5b"
+    },
+    {
+      "file": "icons/lock.svg",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/challenges-shared/icon-lock.svg",
+      "bytes": 730,
+      "sha256": "5e5f764d298b1d45c7dc56edaf78585d274e31f78f3f86200e456be6a3ca48f4"
+    },
+    {
+      "file": "icons/control-close.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-navigation/global/default/control-close.png",
+      "bytes": 611,
+      "sha256": "214d98e4f4d1c6322b7d8e18e652b07f1de03b879fe14640b4a5682da8d3c418"
+    },
+    {
+      "file": "icons/control-hide.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-navigation/global/default/control-hide.png",
+      "bytes": 214,
+      "sha256": "fda03be32e96f486727cb775ba584ed7ed102a498bbf539c1f10959424e3d796"
+    },
+    {
+      "file": "frame/tooltip-caret.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/uikit/tooltip/tooltip-caret.png",
+      "bytes": 754,
+      "sha256": "4af986cb487cc8fe4c19116921cfbfd60ea05789ac985a352db2586347e06765"
+    },
+    {
+      "file": "frame/tooltip-sub-border-horizontal.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-static-assets/global/default/uikit/tooltip/tooltip-sub-border-horizontal.png",
+      "bytes": 205,
+      "sha256": "eb42f7f116443bd8da0f03f3991566d2a209103cde82481366acd40ed6221ade"
+    },
+    {
+      "file": "frame/tooltip-system-caret.png",
+      "url": "https://raw.communitydragon.org/16.20/plugins/rcp-fe-lol-uikit/global/default/images/tooltip-system-caret.png",
+      "bytes": 413,
+      "sha256": "84e141beb145167462cec313b6d23519c72c72ac85a91d3263d57f71f36ea484"
+    }
+  ]
+}

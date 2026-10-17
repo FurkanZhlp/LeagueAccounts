@@ -1,7 +1,7 @@
 //! Data shapes sent to the web interface. Passwords never appear here.
 
 use leagueaccounts::history::{QueueHistory, RankHistory, Snapshot};
-use leagueaccounts::models::{Account, AccountKey};
+use leagueaccounts::models::{Account, AccountKey, Ban, RankProvenance};
 use serde::{Deserialize, Serialize};
 
 /// Points of the card sparkline, newest last.
@@ -72,13 +72,6 @@ pub struct TftView {
     last_set: String,
 }
 
-/// `[unix_ms, score]` pairs per queue.
-#[derive(Clone, Default, Serialize)]
-pub struct TrendView {
-    lol: Vec<(u64, i32)>,
-    tft: Vec<(u64, i32)>,
-}
-
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountView {
@@ -92,7 +85,17 @@ pub struct AccountView {
     has_password: bool,
     lol: LolView,
     tft: TftView,
+    rank_provenance: Option<RankProvenance>,
+    tft_provenance: Option<RankProvenance>,
+    ban: Option<Ban>,
     trend: TrendView,
+}
+
+/// `[unix_ms, score]` pairs per queue (LP history kept by this fork).
+#[derive(Clone, Default, Serialize)]
+pub struct TrendView {
+    lol: Vec<(u64, i32)>,
+    tft: Vec<(u64, i32)>,
 }
 
 fn trend(series: &[Snapshot]) -> Vec<(u64, i32)> {
@@ -106,6 +109,12 @@ fn trend(series: &[Snapshot]) -> Vec<(u64, i32)> {
 pub fn account_view(account: &Account, history: &RankHistory) -> AccountView {
     let queues = history.get(&account.key());
     AccountView {
+        trend: queues
+            .map(|queues| TrendView {
+                lol: trend(&queues.lol),
+                tft: trend(&queues.tft),
+            })
+            .unwrap_or_default(),
         account_id: account.account_id.clone(),
         name: account.name.clone(),
         riot_id_not_found: account.riot_id_not_found,
@@ -114,6 +123,9 @@ pub fn account_view(account: &Account, history: &RankHistory) -> AccountView {
         description: account.description.clone(),
         level: account.level.clone(),
         has_password: !account.password.is_empty(),
+        rank_provenance: account.rank_provenance.clone(),
+        tft_provenance: account.tft_provenance.clone(),
+        ban: account.ban,
         lol: LolView {
             tier: account.tier.clone(),
             division: account.division.clone(),
@@ -127,12 +139,6 @@ pub fn account_view(account: &Account, history: &RankHistory) -> AccountView {
             lp: account.tft.lp.clone(),
             last_set: account.tft.last_set.clone(),
         },
-        trend: queues
-            .map(|queues| TrendView {
-                lol: trend(&queues.lol),
-                tft: trend(&queues.tft),
-            })
-            .unwrap_or_default(),
     }
 }
 

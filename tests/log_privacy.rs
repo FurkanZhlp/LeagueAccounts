@@ -51,6 +51,13 @@ fn exercise_logging(directory: &std::path::Path) {
     logging::install_panic_hook();
     logging::init().unwrap();
     assert!(logging::is_available());
+    logging::record(Event::LoginStarted, Reason::RiotClient);
+    logging::record(Event::LoginWaiting, Reason::AuthStarting);
+    logging::record(Event::LoginWaiting, Reason::GameIdentityPending);
+    leagueaccounts::riot_client::LoginStep::LaunchGame.record();
+    leagueaccounts::riot_client::record_login_result(&Err(
+        leagueaccounts::riot_client::LoginError::AccountMismatch,
+    ));
 
     let path = directory.join(format!("{ACCOUNT_ID}-{PASSWORD}.json"));
     let mut manager = AccountManager::with_path(&path, Arc::new(PanickingProvider));
@@ -101,6 +108,9 @@ fn exercise_logging(directory: &std::path::Path) {
         .build()
         .unwrap_err();
     logging::record(Event::RankFetchFailed, Reason::from_request(&error));
+    // Update failures are logged by category; their text includes the URL.
+    let update_error = leagueaccounts::updates::UpdateError::from(error);
+    logging::record(Event::UpdateCheckFailed, update_error.reason());
     let worker = std::thread::Builder::new()
         .name(format!("{ACCOUNT_ID}-{PASSWORD}"))
         .spawn(|| panic!("{ACCOUNT_ID}\n{PASSWORD}"))
@@ -115,6 +125,10 @@ fn exercise_logging(directory: &std::path::Path) {
         .concat();
     for event in [
         "session_started",
+        "login_started",
+        "login_waiting",
+        "login_progress",
+        "login_failed",
         "session_ended",
         "panic",
         "rank_worker_panicked",
@@ -123,6 +137,7 @@ fn exercise_logging(directory: &std::path::Path) {
         "accounts_save_failed",
         "export_failed",
         "rank_fetch_failed",
+        "update_check_failed",
     ] {
         assert!(
             logs.contains(&format!("event={event} ")),

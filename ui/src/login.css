@@ -68,7 +68,7 @@
 
 .login-title {
   margin: 0;
-  font-family: "Cinzel", serif;
+  font-family: Beaufort, serif;
   font-weight: 600;
   font-size: 26px;
   letter-spacing: 0.06em;
@@ -80,21 +80,23 @@
   font-weight: 500;
 }
 .login-progress {
+  --login-progress: 0;
   width: 100%;
-  height: 4px;
-  margin-bottom: 18px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.07);
+  height: 8px;
+  padding: 1px;
+  margin-bottom: 24px;
+  border: 1px solid #463714;
+  background: #010a13;
   overflow: hidden;
 }
 .login-progress span {
   display: block;
   height: 100%;
-  width: 0;
-  border-radius: inherit;
-  background: var(--accent);
-  box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 70%, transparent);
-  transition: width 0.6s var(--ease);
+  width: 100%;
+  background: linear-gradient(90deg, #785a28, #c8aa6e 70%, #f0e6d2);
+  transform: scaleX(var(--login-progress));
+  transform-origin: left;
+  transition: transform 240ms ease-out;
 }
 
 .login-steps {
@@ -111,7 +113,7 @@
   align-items: center;
   gap: 12px;
   padding: 8px 12px;
-  border-radius: 10px;
+  border-radius: 0;
   color: var(--faint);
   font-weight: 500;
   transition:
@@ -151,15 +153,6 @@
   background: var(--success);
   color: #06210f;
   animation: pop 0.4s var(--spring);
-}
-.login-steps li.skipped {
-  opacity: 0.4;
-}
-.login-steps li.skipped .step-label {
-  text-decoration: line-through;
-}
-.login-steps li.skipped .step-icon {
-  border-style: dashed;
 }
 .login-steps li.error {
   color: #ff8a8a;
@@ -238,7 +231,7 @@
   align-items: center;
   gap: 12px;
   padding: 10px 10px 10px 14px;
-  border-radius: 14px;
+  border-radius: 0;
   background: rgba(22, 28, 42, 0.97);
   backdrop-filter: blur(16px);
   border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
@@ -256,16 +249,6 @@
     opacity: 0;
     transform: translate(-50%, 30px);
   }
-}
-.update-icon {
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 15%, transparent);
-  animation: pulse-glow 2.4s ease-in-out infinite;
 }
 .update-body {
   display: flex;
@@ -296,4 +279,57 @@
 .update-result {
   color: var(--accent);
   font-weight: 600;
+}
+
+/* Launch update screen under the hextech loader, after the client's
+   lol-loading-screen: Beaufort caps in #c8aa6e over a 200×16 progress bar. */
+.update-screen {
+  position: absolute;
+  /* The loader's art spans about 60px around the centre of its 300px box. */
+  top: calc(50% + 64px);
+  left: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 360px;
+  transform: translateX(-50%);
+  text-align: center;
+}
+.update-screen-title {
+  margin: 0;
+  font-family: Beaufort, serif;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #c8aa6e;
+}
+.update-meter {
+  box-sizing: border-box;
+  width: 200px;
+  height: 16px;
+  padding: 3px;
+  border: 1px solid #785a28;
+  background: #010a13;
+}
+.update-meter span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(to right, #785a28, #c8aa6e);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.2s linear;
+}
+.update-screen-detail {
+  min-height: 18px;
+  margin: 0;
+  font-size: 12px;
+  color: #a09b8c;
+  font-variant-numeric: tabular-nums;
+}
+@media (prefers-reduced-motion: reduce) {
+  .update-meter span {
+    transition: none;
+  }
 }

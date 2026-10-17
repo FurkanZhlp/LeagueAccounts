@@ -1,0 +1,73 @@
+name: Release
+
+# Push a vX.Y.Z tag on a commit whose version files say X.Y.Z. The workflow
+# builds LeagueAccounts.exe and creates a draft release with it; write the
+# notes and publish it. Automatic updates read published releases only, so
+# nothing reaches users before that.
+#
+# Plain versions only: a pre-release tag such as v3.1.0-beta would publish as
+# the latest release, and apps compare it as equal to v3.1.0.
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install stable Rust
+        run: rustup toolchain install stable --profile minimal
+      - name: Check the tag and version files
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::$GITHUB_REF_NAME is not a plain vX.Y.Z release tag"
+            exit 1
+          fi
+          check() {
+            if [ "$2" != "$version" ]; then
+              echo "::error file=$1::$1 says $2 but the tag is $GITHUB_REF_NAME"
+              exit 1
+            fi
+          }
+          check package.json "$(node -p "require('./package.json').version")"
+          check src-tauri/tauri.conf.json "$(node -p "require('./src-tauri/tauri.conf.json').version")"
+          check Cargo.toml "$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
+          check src-tauri/Cargo.toml "$(sed -n 's/^version = "\(.*\)"/\1/p' src-tauri/Cargo.toml | head -1)"
+      - name: Install frontend dependencies
+        run: npm ci
+      - name: Unit and regression tests
+        run: cargo +stable test --locked --workspace --all-targets
+      # Builds the UI first (beforeBuildCommand), then the portable executable.
+      - name: Release build
+        run: npx tauri build --no-bundle
+      - name: Create a draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --draft --verify-tag --generate-notes \
+            --title "$GITHUB_REF_NAME" target/release/LeagueAccounts.exe
+      # Apps install an update only if it matches the SHA-256 digest GitHub
+      # reports for the asset.
+      - name: Check GitHub's digest of the uploaded executable
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          expected="sha256:$(sha256sum target/release/LeagueAccounts.exe | cut -d' ' -f1)"
+          actual=$(gh api "repos/$GITHUB_REPOSITORY/releases" --jq \
+            ".[] | select(.tag_name == \"$GITHUB_REF_NAME\") | .assets[] | select(.name == \"LeagueAccounts.exe\") | .digest")
+          if [ "$actual" != "$expected" ]; then
+            echo "::error::GitHub reports '$actual' for LeagueAccounts.exe, expected $expected"
+            exit 1
+          fi

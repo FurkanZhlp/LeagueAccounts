@@ -1,16 +1,16 @@
 // Development-only stand-in for the Tauri backend, used when the UI is opened
-// in a plain browser (`npm run dev`). Never bundled into release builds.
-import {
-  api,
-  events,
-  keyId,
-  parseAccountLine,
-  type AccountView,
-  type HistoryPoint,
-  type Key,
-  type NewAccount,
-  type RefreshDone,
-} from "./api";
+// in a plain browser (`npm run dev`).
+// Never bundled into release builds. Everything lives only in memory.
+import { ApiError, api, events, keyId, parseAccountLine, type AccountView, type BulkAddResult, type HistoryPoint, type Key, type LoginStep, type NewAccount, type RefreshDone, type Settings, type UpdateStatus } from "./api";
+
+const lol = (tier: string, division: string, lp: string, finished = "Gold II", reached = finished) => ({
+  tier,
+  division,
+  lp,
+  reachedLastSeason: reached,
+  finishedLastSeason: finished,
+});
+const tft = (tier: string, division: string, lp: string, lastSet = "Unranked") => ({ tier, division, lp, lastSet });
 
 const LADDER = ["Iron", "Bronze", "Silver", "Gold", "Platinum", "Emerald", "Diamond"];
 const DIVS = ["IV", "III", "II", "I"];
@@ -27,7 +27,7 @@ function pointOf(t: number, score: number): HistoryPoint {
   return { t, tier: LADDER[Math.floor(score / 400)], division: DIVS[Math.floor((score % 400) / 100)], lp: score % 100, score };
 }
 
-/** A deterministic random walk ending at the current rank. */
+/** A deterministic random walk ending at the current rank (LP history demo). */
 function fakeHistory(seed: string, end: number | null): HistoryPoint[] {
   if (end === null) return [];
   let state = [...seed].reduce((sum, char) => sum + char.charCodeAt(0), 0);
@@ -44,15 +44,6 @@ function fakeHistory(seed: string, end: number | null): HistoryPoint[] {
   return points.reverse();
 }
 
-const lol = (tier: string, division: string, lp: string, finished = "Gold II", reached = finished) => ({
-  tier,
-  division,
-  lp,
-  reachedLastSeason: reached,
-  finishedLastSeason: finished,
-});
-const tft = (tier: string, division: string, lp: string, lastSet = "Unranked") => ({ tier, division, lp, lastSet });
-
 const sample: AccountView[] = [
   ["mainacc01", "Hextech Fox#EUW", "EUW", "412", "main", lol("Diamond", "II", "57", "Emerald I", "Diamond IV 12LP"), tft("Master", "", "142", "Diamond I")],
   ["smurfy_tr", "Kebab Enjoyer#TR1", "TR", "187", "smurf", lol("Emerald", "IV", "23", "Platinum I"), tft("Gold", "III", "64", "Gold IV")],
@@ -62,6 +53,9 @@ const sample: AccountView[] = [
   ["goldenboy", "Golden Boy#KR1", "KR", "256", "Lee Sin OTP", lol("Gold", "III", "76", "Gold I", "Platinum IV"), tft("Emerald", "II", "5", "Platinum II")],
   ["gm_lux", "Lux Main#EUW", "EUW", "520", "", lol("Grandmaster", "", "512", "Master 210LP"), tft("Diamond", "IV", "0", "Emerald I")],
   ["bronzie", "Bronze Spirit#TR1", "TR", "61", "", lol("Bronze", "I", "99", "Iron I"), tft("Bronze", "IV", "17")],
+  ["scholarly", "Arcane Scholar#EUNE", "EUNE", "380", "TFT main", lol("Master", "", "210", "Diamond I"), tft("Challenger", "", "1040", "Grandmaster")],
+  ["tidalwave", "Tidal Wave#BR1", "BR", "143", "duo with Leo", lol("Platinum", "II", "48", "Gold I"), tft("Grandmaster", "", "520", "Master")],
+  ["firstrecall", "First Recall#KR1", "KR", "30", "fresh account", lol("Iron", "IV", "7", "Unranked"), tft("Silver", "II", "36", "Bronze I")],
 ].map(([accountId, name, regionDisplay, level, description, lolRank, tftRank]) => ({
   accountId: accountId as string,
   name: name as string,
@@ -73,6 +67,7 @@ const sample: AccountView[] = [
   hasPassword: true,
   lol: lolRank as AccountView["lol"],
   tft: tftRank as AccountView["tft"],
+  ban: accountId === "smurfy_tr" ? { until: Date.now() + (6 * 24 + 13) * 3_600_000 } : null,
   trend: { lol: [], tft: [] },
 }));
 for (const account of sample) {
@@ -84,26 +79,60 @@ for (const account of sample) {
 
 type Handler<T> = (payload: T) => void;
 const listeners = {
-  step: [] as Handler<string>[],
+  step: [] as Handler<LoginStep>[],
   pending: [] as Handler<Key[]>[],
   update: [] as Handler<AccountView>[],
   done: [] as Handler<RefreshDone>[],
+  status: [] as Handler<UpdateStatus>[],
 };
 const unlisten = () => () => {};
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const settings = {
+const settings: Settings = {
   autoRefresh: true,
   intervalMinutes: 30,
   startMinimized: false,
   launchAtStartup: false,
-  loginMethod: "riot" as const,
+  loginMethod: "riot",
   launchGame: true,
+  autoUpdate: true,
   riotClientFound: true,
   tftInstalled: true,
 };
 
+// Updates: `?scene=updating` finds one at launch (the update screen),
+// `?scene=restart` installs one in the background (the restart notice).
+const release = { version: "3.1.0", name: "v3.1.0", url: "https://github.com/", notes: "", publishedAt: "" };
+let update: UpdateStatus = { phase: "checking", current: "3.0.3-dev", release: null, received: 0, total: 0, launch: true, seq: 1 };
+const setUpdate = (change: Partial<UpdateStatus>) => {
+  update = { ...update, ...change, seq: update.seq + 1 };
+  listeners.status.forEach((handler) => handler(update));
+};
+/** About six seconds of simulated download, then installed. */
+function simulateInstall(launch: boolean): void {
+  const total = 14_680_064;
+  setUpdate({ phase: "downloading", release, received: 0, total, launch });
+  // At launch, start progressing once the update screen or the app is showing: a slow cold
+  // start must not reach the launch check after the install already finished (and restarted).
+  let shown = !launch;
+  const timer = setInterval(() => {
+    shown ||= document.querySelector("#startup-loader .update-screen") !== null || document.body.classList.contains("ready");
+    if (!shown) return;
+    const received = Math.min(total, update.received + total / 30);
+    setUpdate({ received });
+    if (received < total) return;
+    clearInterval(timer);
+    setUpdate({ phase: "ready" });
+  }, 200);
+}
+
 export function installMock(): void {
+  const scene = new URLSearchParams(location.search).get("scene");
+  setTimeout(() => {
+    if (scene === "updating") simulateInstall(true);
+    else if (scene === "restart") setUpdate({ phase: "ready", release, launch: false });
+    else setUpdate({ phase: "upToDate", release: { ...release, version: "3.0.3" } });
+  }, scene === "restart" ? 1500 : 300);
   let accounts = structuredClone(sample);
   const find = (key: Key) => accounts.find((account) => keyId(account) === keyId(key));
   const fakeFetch = (targets: AccountView[], exclusive = false) => {
@@ -124,24 +153,19 @@ export function installMock(): void {
     bootstrap: async () => ({
       accounts,
       regions: ["EUW", "EUNE", "NA", "KR", "TR", "BR"],
-      version: "3.3.0",
+      version: "3.0.3-dev",
       loggingAvailable: true,
       loadError: null,
       settings,
       schedule: { enabled: true, intervalMinutes: 30, nextAt: Date.now() + 23 * 60_000, lastAt: Date.now() - 7 * 60_000, running: false },
     }),
-    getHistory: async (key: Key) => {
-      const account = find(key)!;
-      return {
-        lol: fakeHistory(account.accountId + "l", scoreOf(account.lol)),
-        tft: fakeHistory(account.accountId + "t", scoreOf(account.tft)),
-      };
-    },
     getSettings: async () => settings,
     updateSettings: async (input: object) => Object.assign(settings, input),
-    login: async () => {
-      const steps = ["openClient", "waitAuth", "findWindow", "focus", "type", "confirm", "launchGame", "done"];
+    login: async (key: Key, _tft: boolean, _closeRunning: boolean, launchBanned: boolean) => {
+      const ban = accounts.find((account) => keyId(account) === keyId(key))?.ban;
+      const steps: LoginStep[] = ["openClient", "waitAuth", "connect", "findWindow", "type", "confirm", "launchGame", "done"];
       for (const step of steps) {
+        if (ban && settings.launchGame && !launchBanned && step === "launchGame") throw new ApiError("account_banned", ban.until == null ? "" : String(ban.until));
         listeners.step.forEach((handler) => handler(step));
         await wait(step === "waitAuth" || step === "confirm" ? 1400 : 700);
       }
@@ -149,15 +173,26 @@ export function installMock(): void {
     },
     cancelLogin: async () => {},
     gameStatus: async () => ({ clientOpen: false, inGame: false, sameAccount: false }),
-    checkUpdate: async () => ({
-      current: "3.0.0",
-      newer: true,
-      latest: { version: "3.3.0", name: "v3.1.0", url: "https://github.com/", notes: "", publishedAt: "" },
-    }),
+    updateStatus: async () => update,
+    checkUpdate: async () => {
+      await wait(400);
+      if (update.phase === "ready" || update.phase === "downloading") return update;
+      if (settings.autoUpdate) simulateInstall(false);
+      else setUpdate({ phase: "available", release, launch: false });
+      return update;
+    },
+    updateIdle: async () => true,
+    restartToUpdate: async () => {
+      if (update.phase !== "ready") throw new ApiError("update_not_ready");
+      setUpdate({ phase: "restarting" });
+      // The new version starts like a fresh launch, without the demo scene.
+      setTimeout(() => location.replace(location.pathname), 800);
+    },
     openRelease: async () => {},
     listAccounts: async () => accounts,
     addAccount: async (input: NewAccount) => {
       const account: AccountView = {
+        trend: { lol: [], tft: [] },
         accountId: input.accountId,
         name: input.name.trim(),
         riotIdNotFound: false,
@@ -168,17 +203,15 @@ export function installMock(): void {
         hasPassword: true,
         lol: lol("Unranked", "", "", "N/A"),
         tft: tft("Unranked", "", "", "N/A"),
-        trend: { lol: [], tft: [] },
       };
       accounts.push(account);
       if (account.name) setTimeout(() => fakeFetch([{ ...account, level: "30", lol: lol("Silver", "II", "45", "Bronze I") }]), 50);
       return account;
     },
-    multiAdd: async (text: string, region: string) => {
+    multiAdd: async (text: string, region: string): Promise<BulkAddResult> => {
       let added = 0;
       const skippedLines: number[] = [];
-      const lines = text.split("\n");
-      for (const [index, line] of lines.entries()) {
+      for (const [index, line] of text.split("\n").entries()) {
         if (!line.trim()) continue;
         const input = parseAccountLine(line);
         if (!input || accounts.some((account) => account.accountId.toLowerCase() === input.accountId.toLowerCase() && account.region === region.toLowerCase())) {
@@ -188,9 +221,9 @@ export function installMock(): void {
         await api.addAccount({ ...input, region, description: "" });
         added++;
       }
-      return { added, skipped: skippedLines.length, skippedLines };
+      return { added, skippedLines };
     },
-    updateAccount: async (key: Key, name: string, description: string, _password?: string | null) => {
+    updateAccount: async (key: Key, name: string, description: string) => {
       const account = find(key)!;
       name = name.trim();
       const renamed = account.name !== name;
@@ -215,14 +248,22 @@ export function installMock(): void {
     importData: async () => null,
     openProfile: async () => {},
     openLogsFolder: async () => {},
-  });
+    getHistory: async (key: Key) => {
+      const account = accounts.find((candidate) => keyId(candidate) === keyId(key))!;
+      return {
+        lol: fakeHistory(account.accountId + "l", scoreOf(account.lol)),
+        tft: fakeHistory(account.accountId + "t", scoreOf(account.tft)),
+      };
+    },
+  } satisfies typeof api);
   Object.assign(events, {
-    onLoginStep: async (handler: Handler<string>) => (listeners.step.push(handler), unlisten()),
-    onUpdateAvailable: async () => unlisten(),
+    onLoginStep: async (handler: Handler<LoginStep>) => (listeners.step.push(handler), unlisten()),
+    onUpdateStatus: async (handler: Handler<UpdateStatus>) => (listeners.status.push(handler), unlisten()),
     onRefreshStarted: async () => unlisten(),
     onSchedule: async () => unlisten(),
     onRankPending: async (handler: Handler<Key[]>) => (listeners.pending.push(handler), unlisten()),
     onRankUpdate: async (handler: Handler<AccountView>) => (listeners.update.push(handler), unlisten()),
     onRefreshDone: async (handler: Handler<RefreshDone>) => (listeners.done.push(handler), unlisten()),
-  });
+    onAccountUpdate: async () => unlisten(),
+  } satisfies typeof events);
 }

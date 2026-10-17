@@ -1,22 +1,28 @@
-import "@fontsource-variable/inter";
-import "@fontsource/cinzel/600.css";
 import "./styles.css";
 import "./features.css";
 import "./login.css";
+import "./league.css";
+import "./client-controls.css";
+import "./lp-history.css";
 
-import { ApiError, accountLabel, api, events, keyId, keyOf, parseAccountLine, type AccountView, type Key, type Release, type Schedule, type Settings } from "./api";
+import { ApiError, accountLabel, api, events, keyId, keyOf, parseAccountLine, type AccountView, type Ban, type Key, type Schedule, type Settings } from "./api";
 import { openLoginOverlay, type LoginOverlay } from "./login";
 import { deltaBadge, historySummary, recentDelta, renderHistoryChart, sparkline, type Range } from "./chart";
 import { LANGUAGES, applyStatic, errorText, lang, localizeRank, setLang, t, tierName, type Lang, type MessageKey } from "./i18n";
 import { $, closeMenu, contextMenu, esc, fragment, leave, modal, reducedMotion, toast } from "./dom";
 import { hydrateIcons, icon } from "./icons";
+import { observeSelects } from "./dropdown";
+import { watchTierNames } from "./fit";
+import { wireControlMotion } from "./motion";
+import { wireTooltips } from "./tooltips";
+import { failStartup, revealApp } from "./startup";
+import { checkUpdateNow, launchUpdate, showUpdateBanner, wireUpdates } from "./update";
 import {
   APEX,
   TIER_ORDER,
   canPlayWith,
   compareRanks,
   emblem,
-  installEmblemDefs,
   isRanked,
   lpProgress,
   normalizeTier,
@@ -52,7 +58,7 @@ const state = {
 
 // ---------------------------------------------------------------- preferences
 
-const PREFS_KEY = "leagueaccounts.prefs";
+const PREFS_KEY = import.meta.env.DEV ? "leagueaccounts.dev.prefs" : "leagueaccounts.prefs";
 
 function loadPrefs(): void {
   try {
@@ -117,7 +123,33 @@ function historyLine(account: AccountView): string {
 }
 
 function cardSignature(account: AccountView, pending: boolean): string {
-  return JSON.stringify([account, state.mode, pending, lang()]);
+  return JSON.stringify([account, state.mode, pending, lang(), banChip(account)]);
+}
+
+/** The suspension still in force; a timed one disappears once it ends. */
+function activeBan(account: AccountView): Ban | null {
+  const ban = account.ban;
+  return ban && (ban.until == null || ban.until > Date.now()) ? ban : null;
+}
+
+function banRemaining(until: number): string {
+  const minutes = Math.max(1, Math.ceil((until - Date.now()) / 60_000));
+  const days = Math.floor(minutes / 1440);
+  const hours = Math.floor((minutes % 1440) / 60);
+  if (days) return t("ban.days", { d: days, h: hours });
+  if (hours) return t("ban.hours", { h: hours, m: minutes % 60 });
+  return t("ban.minutes", { m: minutes });
+}
+
+const banEnd = (until: number): string =>
+  new Date(until).toLocaleString(lang(), { dateStyle: "medium", timeStyle: "short" });
+
+function banChip(account: AccountView): string {
+  const ban = activeBan(account);
+  if (!ban) return "";
+  const label = ban.until == null ? t("ban.permanent") : t("ban.chip", { time: banRemaining(ban.until) });
+  const detail = ban.until == null ? t("ban.permanent") : t("ban.until", { date: banEnd(ban.until) });
+  return `<span class="chip chip-ban" data-tooltip="${esc(detail)}">${icon("alert", 11)}${esc(label)}</span>`;
 }
 
 function cardInner(account: AccountView, pending: boolean): string {
@@ -126,37 +158,39 @@ function cardInner(account: AccountView, pending: boolean): string {
   const [gameName, tag] = splitRiotId(accountLabel(account));
   const lp = isRanked(rank) && rank.lp ? `<span class="lp">${esc(rank.lp)} LP</span>` : "";
   return `
-    <div class="card-sheen"></div>
     <div class="card-top">
-      <div class="emblem-wrap">${emblem(tier, 58)}</div>
       <div class="identity">
-        <div class="name" title="${esc(accountLabel(account))}">
+        <div class="name" data-tooltip="${esc(accountLabel(account))}">
           <span class="game-name">${esc(gameName)}</span>${tag ? `<span class="tag">#${esc(tag)}</span>` : ""}
         </div>
         <div class="meta">
           <span class="chip chip-region">${esc(account.regionDisplay)}</span>
-          ${account.level ? `<span class="chip">Lv ${esc(account.level)}</span>` : ""}
-          <span class="acc-id" title="${esc(t("card.accountId"))}">${icon("users", 12)}${esc(account.accountId)}</span>
+          ${account.level ? `<span class="chip chip-level">${esc(t("card.level"))} <b>${esc(account.level)}</b></span>` : ""}
+          ${banChip(account)}
+          <span class="acc-id" data-tooltip="${esc(t("card.accountId"))}">${icon("users", 12)}${esc(account.accountId)}</span>
         </div>
       </div>
-      <button class="icon-btn card-more" data-act="menu" title="${esc(t("card.more"))}">${icon("more")}</button>
+      <button class="icon-btn card-more" data-act="menu" aria-label="${esc(t("card.more"))}" data-tooltip="${esc(t("card.more"))}">${icon("more")}</button>
     </div>
-    <div class="rank-block${pending ? " is-pending" : ""}">
+    <div class="card-rank">
+      <div class="emblem-wrap">${emblem(tier, 132, state.mode)}</div>
+      <div class="rank-block${pending ? " is-pending" : ""}">
       ${!account.name || account.riotIdNotFound ? `
       <div class="rank-notice${account.riotIdNotFound ? " rank-not-found" : ""}">${esc(t(account.name ? "card.riotIdNotFound" : "card.noRiotId"))}</div>
       <button class="rank-edit" data-act="edit">${esc(t(account.name ? "card.updateRiotId" : "card.addRiotId"))}</button>` : `
-      <div class="rank-line">
-        <span class="rank-name">${esc(rankLabel(rank))}</span>${lp}
-      </div>
+      <div class="rank-line"><span class="rank-name">${esc(rankLabel(rank))}</span></div>
+      ${lp}
       <div class="lp-bar${APEX.has(tier) ? " apex" : ""}"><span style="--p:${lpProgress(rank)}"></span></div>
-      <div class="history">${historyLine(account)}</div>
-      <div class="trend">${sparkline(account.trend[state.mode])}${deltaBadge(recentDelta(account.trend[state.mode]))}</div>`}
+      `}
+      </div>
     </div>
-    ${account.description ? `<p class="desc" title="${esc(account.description)}">${esc(account.description)}</p>` : `<p class="desc desc-empty"></p>`}
+    ${account.name && !account.riotIdNotFound ? `<div class="history">${historyLine(account)}</div>
+    <div class="trend">${sparkline(account.trend[state.mode])}${deltaBadge(recentDelta(account.trend[state.mode]))}</div>` : ""}
+    ${account.description ? `<p class="desc" data-tooltip="${esc(account.description)}">${esc(account.description)}</p>` : `<p class="desc desc-empty"></p>`}
     <div class="card-actions">
-      <button class="btn btn-play" data-act="login" title="${esc(t("card.loginTitle"))}">${icon("login", 15)}${esc(t("card.login"))}</button>
-      <button class="icon-btn" data-act="copy-id" title="${esc(t("card.copyId"))}">${icon("copy", 15)}</button>
-      <button class="icon-btn" data-act="copy-pass" title="${esc(t("card.copyPassword"))}">${icon("key", 15)}</button>
+      <button class="btn btn-play" data-act="login" data-tooltip="${esc(t("card.loginTitle"))}">${icon("login", 15)}${esc(t("card.login"))}</button>
+      <button class="icon-btn" data-act="copy-id" aria-label="${esc(t("card.copyId"))}" data-tooltip="${esc(t("card.copyId"))}">${icon("copy", 15)}</button>
+      <button class="icon-btn" data-act="copy-pass" aria-label="${esc(t("card.copyPassword"))}" data-tooltip="${esc(t("card.copyPassword"))}">${icon("key", 15)}</button>
     </div>`;
 }
 
@@ -169,6 +203,7 @@ function updateCard(element: HTMLElement, account: AccountView): void {
   element.style.setProperty("--tier-light", colors.light);
   element.style.setProperty("--tier-dark", colors.dark);
   element.classList.toggle("selected", state.selected === id);
+  element.classList.toggle("banned", activeBan(account) !== null);
   element.classList.toggle("apex", APEX.has(normalizeTier(rankOf(account, state.mode).tier)));
   if (element.dataset.signature === signature) return;
   const wasPending = element.dataset.pending === "1";
@@ -187,14 +222,12 @@ let firstRender = true;
 function renderAccounts(): void {
   const container = $("#accounts");
   const list = visibleAccounts();
+  $("#account-count").textContent = t("page.count", { shown: list.length, total: state.accounts.length });
+  $("#clear-filters").hidden = !state.search && state.regionFilter === "all" && !state.tierFilter && (state.mode === "tft" || state.friendTier === "all");
   const existing = new Map<string, HTMLElement>();
   container.querySelectorAll<HTMLElement>(":scope > .card").forEach((element) => {
     existing.set(element.dataset.key ?? "", element);
   });
-
-  // FLIP: remember where every card was before reordering.
-  const before = new Map<string, DOMRect>();
-  if (!reducedMotion()) existing.forEach((element, id) => before.set(id, element.getBoundingClientRect()));
 
   const wanted = new Set(list.map((account) => keyId(keyOf(account))));
   existing.forEach((element, id) => {
@@ -217,23 +250,14 @@ function renderAccounts(): void {
       });
     }
     updateCard(element, account);
-    if (container.children[index] !== element) container.insertBefore(element, container.children[index] ?? null);
+    if (container.children[index] !== element) {
+      container.insertBefore(element, container.children[index] ?? null);
+      if (existing.has(id) && !reducedMotion()) {
+        element.getAnimations().forEach(animation => animation.cancel());
+        element.animate([{ opacity: .4 }, { opacity: 1 }], { duration: 200, easing: "linear" });
+      }
+    }
   });
-
-  if (!reducedMotion()) {
-    container.querySelectorAll<HTMLElement>(":scope > .card").forEach((element) => {
-      const old = before.get(element.dataset.key ?? "");
-      if (!old) return;
-      const now = element.getBoundingClientRect();
-      const dx = old.left - now.left;
-      const dy = old.top - now.top;
-      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
-      element.animate(
-        [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "translate(0, 0)" }],
-        { duration: 420, easing: "cubic-bezier(.2,.8,.2,1)" },
-      );
-    });
-  }
   firstRender = false;
 
   const empty = $("#empty");
@@ -241,7 +265,7 @@ function renderAccounts(): void {
   if (!list.length) {
     const noAccounts = state.accounts.length === 0;
     empty.innerHTML = `
-      <div class="empty-art">${emblem(noAccounts ? "Unranked" : "Iron", 88)}</div>
+      <div class="empty-art"><img src="/league/icons/empty-poro.svg" width="88" height="88" alt="" /></div>
       <h2>${t(noAccounts ? "empty.noneTitle" : "empty.noMatchTitle")}</h2>
       <p>${t(noAccounts ? "empty.noneText" : "empty.noMatchText")}</p>
       ${
@@ -268,8 +292,8 @@ function renderDistribution(): void {
       const count = counts.get(tier) ?? 0;
       const colors = palette(tier);
       const active = state.tierFilter === tier;
-      return `<button class="dist-row${active ? " active" : ""}${count ? "" : " zero"}" data-tier="${tier}" style="--tier:${colors.base};--w:${count / max}" ${count ? "" : "disabled"}>
-        <span class="dist-emblem">${emblem(tier, 20)}</span>
+      return `<button class="dist-row${active ? " active" : ""}${count ? "" : " zero"}" data-tier="${tier}" aria-pressed="${active}" style="--tier:${colors.base};--w:${count / max}" ${count ? "" : "disabled"}>
+        <span class="dist-emblem">${emblem(tier, 20, state.mode)}</span>
         <span class="dist-name">${tierName(tier)}</span>
         <span class="dist-bar"><span></span></span>
         <span class="dist-count">${count}</span>
@@ -280,6 +304,7 @@ function renderDistribution(): void {
 
 function renderControls(): void {
   document.documentElement.dataset.mode = state.mode;
+  $("#queue-label").textContent = t(state.mode === "lol" ? "page.queueLol" : "page.queueTft");
   document.querySelectorAll<HTMLButtonElement>(".mode-btn").forEach((button) => {
     button.setAttribute("aria-selected", String(button.dataset.mode === state.mode));
   });
@@ -351,18 +376,39 @@ async function confirmCloseLeague(account: AccountView, inGame: boolean): Promis
   return answer === "close";
 }
 
+/** Ask before signing in to an account Riot reported as banned. */
+async function confirmBannedLogin(account: AccountView, ban: Ban): Promise<boolean> {
+  const name = accountLabel(account);
+  const text = ban.until == null
+    ? t("ban.permanentText", { name })
+    : t("ban.text", { name, date: banEnd(ban.until), time: banRemaining(ban.until) });
+  const answer = await modal({
+    title: t("ban.title"),
+    body: `<div class="warning danger">${icon("alert", 18)}<p>${esc(text)}</p></div>`,
+    actions: [
+      { label: t("common.cancel"), value: "cancel" },
+      { label: t("ban.confirm"), value: "login", kind: "danger" },
+    ],
+  });
+  return answer === "login";
+}
+
 async function login(account: AccountView): Promise<void> {
   if (loginBusy) return;
   loginBusy = true;
   try {
-    await runLogin(account);
+    // A banned account can still sign in to the Riot Client; only the game disconnects.
+    const launching = state.settings?.loginMethod !== "previous" && Boolean(state.settings?.launchGame);
+    const ban = launching ? activeBan(account) : null;
+    if (ban && !(await confirmBannedLogin(account, ban))) return;
+    await runLogin(account, false, ban !== null);
   } finally {
     loginBusy = false;
     activeLogin = null;
   }
 }
 
-async function runLogin(account: AccountView, switchAccount = false, closeRunning = false): Promise<void> {
+async function runLogin(account: AccountView, closeRunning = false, launchBanned = false): Promise<void> {
   const viaRiot = state.settings?.loginMethod !== "previous";
   const key = keyOf(account);
 
@@ -372,7 +418,7 @@ async function runLogin(account: AccountView, switchAccount = false, closeRunnin
     if (!status) return;
     if ((status.clientOpen || status.inGame) && !status.sameAccount) {
       if (!(await confirmCloseLeague(account, status.inGame))) return;
-      return runLogin(account, true, true);
+      return runLogin(account, true, launchBanned);
     }
   }
 
@@ -382,42 +428,35 @@ async function runLogin(account: AccountView, switchAccount = false, closeRunnin
     tier: rankOf(account, state.mode).tier,
     viaRiot,
     closeLeague: closeRunning,
-    switchAccount,
     launchGame: launching,
     onCancel: () => void api.cancelLogin(),
   });
   activeLogin = overlay;
   try {
-    const result = await api.login(key, state.mode === "tft", switchAccount, closeRunning);
+    const result = await api.login(key, state.mode === "tft", closeRunning, launchBanned);
     if (result === "signedIn") {
-      overlay.succeed(t("login.success"), launching ? t("toast.launchingGame") : accountLabel(account));
+      overlay.succeed(t("login.success"), launching ? t("toast.gameLaunched") : accountLabel(account));
     } else if (result === "alreadySignedIn") {
-      overlay.succeed(t("toast.alreadySignedIn"), launching ? t("toast.launchingGame") : accountLabel(account));
+      overlay.succeed(t("toast.alreadySignedIn"), launching ? t("toast.gameLaunched") : accountLabel(account));
     } else if (result === "typed") {
       if (viaRiot) overlay.finishInClient();
       else overlay.succeed(t("toast.loggedIn"), accountLabel(account));
-    } else if (result === "otherAccount") {
-      overlay.close();
-      const answer = await modal({
-        title: t("login.switchTitle"),
-        body: `<p class="hint">${esc(t("login.switchText", { name: accountLabel(account) }))}</p>`,
-        actions: [
-          { label: t("common.cancel"), value: "cancel" },
-          { label: t("login.switchConfirm"), value: "switch", kind: "primary" },
-        ],
-      });
-      activeLogin = null;
-      if (answer === "switch") await runLogin(account, true, closeRunning);
-      return;
     }
   } catch (error) {
     if (error instanceof ApiError && error.code === "login_cancelled") {
       overlay.close();
+    } else if (error instanceof ApiError && error.code === "account_banned") {
+      // Riot reported the ban after sign-in; the game was not started.
+      const until = Number(error.detail) || null;
+      overlay.fail(
+        until == null ? t("ban.stoppedPermanent") : t("ban.stopped", { date: banEnd(until), time: banRemaining(until) }),
+        t("ban.title"),
+      );
     } else if (error instanceof ApiError && error.code === "league_running") {
       // The client was opened between the check and the login: ask again.
       overlay.close();
       activeLogin = null;
-      return runLogin(account, switchAccount, false);
+      return runLogin(account, false, launchBanned);
     } else {
       overlay.fail(describe(error));
     }
@@ -447,7 +486,7 @@ async function editAccount(account: AccountView): Promise<void> {
       <label class="field"><span>${t("edit.password")} <em>${t("add.optional")}</em></span>
         <div class="password">
           <input name="password" type="password" autocomplete="new-password" placeholder="${esc(t("edit.passwordPh"))}" />
-          <button type="button" class="icon-btn" data-reveal title="${esc(t("add.show"))}">${icon("eye", 15)}</button>
+          <button type="button" class="icon-btn" data-reveal aria-label="${esc(t("add.show"))}">${icon("eye", 15)}</button>
         </div></label>
       <p class="hint">${t("edit.hint")}</p>`,
     actions: [
@@ -486,7 +525,7 @@ async function deleteAccount(account: AccountView): Promise<void> {
     title: t("delete.title"),
     body: `
       <div class="confirm-account">
-        ${emblem(rankOf(account, state.mode).tier, 44)}
+        ${emblem(rankOf(account, state.mode).tier, 44, state.mode)}
         <div><strong>${esc(accountLabel(account))}</strong><span>${esc(account.accountId)} · ${esc(account.regionDisplay)}</span></div>
       </div>
       <p class="hint">${t("delete.hint")}</p>`,
@@ -506,38 +545,6 @@ async function deleteAccount(account: AccountView): Promise<void> {
   toast("success", t("toast.deleted"), accountLabel(account));
 }
 
-function openMenu(account: AccountView, x: number, y: number): void {
-  select(keyId(keyOf(account)));
-  contextMenu(x, y, [
-    ...(account.name ? [{
-      label: t(state.mode === "lol" ? "menu.opgg" : "menu.opggTft"),
-      icon: "external-link",
-      run: () => void guard(() => api.openProfile(keyOf(account), state.mode === "tft"), "toast.openFailed"),
-    }, { label: t("menu.chart"), icon: "chart", run: () => void openChart(account) }] : []),
-    { label: t("menu.edit"), icon: "pencil", run: () => void editAccount(account) },
-    "sep",
-    { label: t("menu.delete"), icon: "trash", danger: true, hint: "Del", run: () => void deleteAccount(account) },
-  ], "account");
-}
-
-async function refreshAll(): Promise<void> {
-  if (state.refreshing || state.schedule?.running) return;
-  state.refreshing = true;
-  state.refreshTotal = 0;
-  state.refreshDone = 0;
-  renderSchedule();
-  const count = await guard(() => api.refreshRanks(), "toast.refreshFailed");
-  if (count === undefined) {
-    state.refreshing = false;
-    renderSchedule();
-    return;
-  }
-  state.refreshTotal = count;
-  renderSchedule();
-}
-
-// ---------------------------------------------------------------- LP history
-
 async function openChart(account: AccountView): Promise<void> {
   const history = await guard(() => api.getHistory(keyOf(account)), "toast.openFailed");
   if (!history) return;
@@ -554,7 +561,7 @@ async function openChart(account: AccountView): Promise<void> {
     wide: true,
     body: `
       <div class="chart-head">
-        <div class="confirm-account">${emblem(rankOf(account, state.mode).tier, 40)}<div><strong>${esc(account.name)}</strong><span>${esc(account.regionDisplay)} · ${esc(rankLabel(rankOf(account, state.mode)))}</span></div></div>
+        <div class="confirm-account">${emblem(rankOf(account, state.mode).tier, 40, state.mode)}<div><strong>${esc(account.name)}</strong><span>${esc(account.regionDisplay)} · ${esc(rankLabel(rankOf(account, state.mode)))}</span></div></div>
         <div class="chart-controls">
           <div class="segmented" data-group="mode">
             <button type="button" data-chart-mode="lol">LoL</button><button type="button" data-chart-mode="tft">TFT</button>
@@ -570,7 +577,7 @@ async function openChart(account: AccountView): Promise<void> {
       const draw = () => {
         root.querySelectorAll<HTMLElement>("[data-range]").forEach((button) => button.classList.toggle("active", button.dataset.range === range));
         root.querySelectorAll<HTMLElement>("[data-chart-mode]").forEach((button) => button.classList.toggle("active", button.dataset.chartMode === mode));
-        renderHistoryChart($(".chart-wrap", root), history[mode], range);
+        renderHistoryChart($(".chart-wrap", root), history[mode], range, mode);
         $(".chart-summary", root).innerHTML = historySummary(history[mode], range);
       };
       root.addEventListener("click", (event) => {
@@ -586,96 +593,71 @@ async function openChart(account: AccountView): Promise<void> {
   });
 }
 
-// ---------------------------------------------------------------- updates
-
-const DISMISSED_UPDATE = "leagueaccounts.dismissedUpdate";
-
-function showUpdate(release: Release, force = false): void {
-  try {
-    if (!force && localStorage.getItem(DISMISSED_UPDATE) === release.version) return;
-  } catch {
-    // Storage unavailable: show it.
-  }
-  document.querySelector(".update-banner")?.remove();
-  const banner = fragment(`
-    <div class="update-banner" role="status">
-      <span class="update-icon">${icon("sparkles", 18)}</span>
-      <div class="update-body">
-        <strong>${esc(t("update.available"))}</strong>
-        <span>${esc(t("update.text", { version: release.version }))}</span>
-      </div>
-      <button class="btn btn-primary" data-update="open">${icon("download", 15)}${esc(t("update.download"))}</button>
-      <button class="icon-btn" data-update="later" title="${esc(t("update.later"))}">${icon("x")}</button>
-    </div>`);
-  $("#toasts").before(banner);
-  banner.addEventListener("click", (event) => {
-    const action = (event.target as HTMLElement).closest<HTMLElement>("[data-update]")?.dataset.update;
-    if (action === "open") void guard(() => api.openRelease(release.url), "toast.openFailed");
-    if (action === "later") {
-      try {
-        localStorage.setItem(DISMISSED_UPDATE, release.version);
-      } catch {
-        // Non-essential.
-      }
-      void leave(banner, "toast-out");
-    }
-  });
+function openMenu(account: AccountView, x: number, y: number): void {
+  select(keyId(keyOf(account)));
+  contextMenu(x, y, [
+    ...(account.name ? [{
+      label: t(state.mode === "lol" ? "menu.opgg" : "menu.opggTft"),
+      icon: "external-link",
+      run: () => void guard(() => api.openProfile(keyOf(account), state.mode === "tft"), "toast.openFailed"),
+    }] : []),
+    { label: t("menu.edit"), icon: "pencil", run: () => void editAccount(account) },
+    ...(account.name ? [{ label: t("menu.chart"), icon: "chart", run: () => void openChart(account) }] : []),
+    { label: t("menu.delete"), icon: "trash", danger: true, run: () => void deleteAccount(account) },
+  ]);
 }
 
-async function checkUpdateNow(button: HTMLButtonElement, output: HTMLElement): Promise<void> {
-  button.disabled = true;
-  output.textContent = "…";
-  const status = await guard(() => api.checkUpdate(), "toast.updateFailed");
-  button.disabled = false;
-  if (!status) {
-    output.textContent = "";
+async function refreshAll(force = false): Promise<void> {
+  if (state.refreshing || state.schedule?.running) return;
+  state.refreshing = true;
+  state.refreshTotal = 0;
+  state.refreshDone = 0;
+  renderSchedule();
+  const count = await guard(() => api.refreshRanks(force), "toast.refreshFailed");
+  if (count === undefined) {
+    state.refreshing = false;
+    renderSchedule();
     return;
   }
-  if (status.newer && status.latest) {
-    output.textContent = t("update.text", { version: status.latest.version });
-    showUpdate(status.latest, true);
-  } else {
-    output.textContent = status.latest ? t("update.latest") : t("update.none");
-  }
+  state.refreshTotal = count;
+  renderSchedule();
 }
 
 // ---------------------------------------------------------------- schedule & settings
 
+/** "h:mm:ss" or "m:ss", like the client's ladder-update countdown. */
+function countdown(ms: number): string {
+  const seconds = Math.max(0, Math.ceil(ms / 1000));
+  const pad = (value: number) => String(value).padStart(2, "0");
+  const [h, m, s] = [Math.floor(seconds / 3600), Math.floor((seconds % 3600) / 60), seconds % 60];
+  return h ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+}
+
+/** Header countdown: "NEXT RANK UPDATE: 22:41", "REFRESHING RANKS 3/11", or "AUTO REFRESH IS OFF". */
 function renderSchedule(): void {
   const root = $<HTMLButtonElement>("#schedule");
   const schedule = state.schedule;
   const running = Boolean(schedule?.running || state.refreshing);
-  let text: string;
-  let progress = 0;
+  const remaining = schedule?.nextAt ? schedule.nextAt - Date.now() : 0;
+  let label: string;
+  let time = "";
   if (running) {
-    text = state.refreshTotal
-      ? t("refresh.busy", { done: state.refreshDone, total: state.refreshTotal })
-      : t("schedule.running");
-    progress = state.refreshTotal ? state.refreshDone / state.refreshTotal : 1;
+    label = t("schedule.running").replace(/…$/, "");
+    if (state.refreshTotal) time = `${state.refreshDone}/${state.refreshTotal}`;
   } else if (!schedule || !schedule.enabled) {
-    text = t("schedule.off");
-  } else if (schedule.nextAt) {
-    const remaining = schedule.nextAt - Date.now();
-    const total = schedule.intervalMinutes * 60_000;
-    progress = Math.min(1, Math.max(0, 1 - remaining / total));
-    if (remaining <= 30_000) {
-      text = t("schedule.soon");
-    } else {
-      const minutes = Math.round(remaining / 60_000);
-      const relative = new Intl.RelativeTimeFormat(lang(), { numeric: "auto" });
-      text = t("schedule.next", {
-        time: minutes >= 60 ? relative.format(Math.round(minutes / 60), "hour") : `${Math.max(1, minutes)} ${t("settings.minutes")}`,
-      });
-    }
+    label = t("schedule.off");
+  } else if (remaining > 1000) {
+    label = `${t("schedule.nextLabel")}:`;
+    time = countdown(remaining);
   } else {
-    text = t("schedule.soon");
+    label = t("schedule.soon");
   }
   root.classList.toggle("off", !schedule?.enabled && !running);
   root.classList.toggle("running", running);
   root.disabled = running;
   root.setAttribute("aria-busy", String(running));
-  root.style.setProperty("--p", String(progress));
-  $(".schedule-text", root).textContent = text;
+  $(".ladder-update-label", root).textContent = label;
+  $(".ladder-update-time", root).textContent = time;
 }
 
 async function openSettings(): Promise<void> {
@@ -694,13 +676,26 @@ async function openSettings(): Promise<void> {
     title: t("settings.title"),
     wide: true,
     body: `
+      <div class="settings-grid">
+      <div class="settings-col">
       <section class="settings-section">
         <h3>${esc(t("settings.general"))}</h3>
         <label class="field inline"><span>${esc(t("settings.language"))}</span>
           <div class="select-wrap"><select name="language">${languageOptions}</select></div></label>
-        ${toggle("launchAtStartup", current.launchAtStartup, t("settings.startup"), t("settings.startupHint"))}
+        ${toggle("launchAtStartup", current.launchAtStartup, t("settings.startup"))}
         ${toggle("startMinimized", current.startMinimized, t("settings.minimized"), t("settings.minimizedHint"))}
       </section>
+      <section class="settings-section">
+        <h3>${esc(t("settings.updates"))}</h3>
+        ${toggle("autoUpdate", current.autoUpdate, t("settings.autoUpdate"), t("settings.autoUpdateHint"))}
+        <div class="update-row">
+          <span>${esc(t("settings.version", { version: $("#version").textContent?.replace(/^v/, "") ?? "" }))}</span>
+          <span class="update-result"></span>
+          <button type="button" class="btn btn-ghost" data-check-update>${icon("refresh-cw", 14)}${esc(t("settings.checkNow"))}</button>
+        </div>
+      </section>
+      </div>
+      <div class="settings-col">
       <section class="settings-section">
         <h3>${esc(t("settings.refresh"))}</h3>
         ${toggle("autoRefresh", current.autoRefresh, t("settings.autoRefresh"))}
@@ -709,7 +704,6 @@ async function openSettings(): Promise<void> {
           <div class="interval-presets">${[5, 15, 30, 60, 120].map((value) => `<button type="button" data-interval="${value}">${value}</button>`).join("")}</div>
           <label class="interval-input"><input name="intervalMinutes" type="number" min="5" max="1440" step="5" value="${current.intervalMinutes}"/><span>${esc(t("settings.minutes"))}</span></label>
         </div>
-        <p class="hint">${esc(t("settings.intervalHint", { min: 5, max: 1440 }))}</p>
       </section>
       <section class="settings-section">
         <h3>${esc(t("settings.login"))}</h3>
@@ -719,15 +713,8 @@ async function openSettings(): Promise<void> {
           <span class="toggle-text"><strong>${esc(t("settings.methodPrevious"))}</strong><span>${esc(t("settings.methodPreviousHint"))}</span></span></label>
         ${toggle("launchGame", current.launchGame, t("settings.launchGame"), t("settings.launchGameHint"))}
       </section>
-      <section class="settings-section">
-        <h3>${esc(t("settings.updates"))}</h3>
-        ${toggle("checkUpdates", current.checkUpdates, t("settings.checkUpdates"))}
-        <div class="update-row">
-          <span>${esc(t("settings.version", { version: $("#version").textContent?.replace(/^v/, "") ?? "" }))}</span>
-          <span class="update-result"></span>
-          <button type="button" class="btn btn-ghost" data-check-update>${icon("refresh-cw", 14)}${esc(t("settings.checkNow"))}</button>
-        </div>
-      </section>`,
+      </div>
+      </div>`,
     actions: [
       { label: t("common.cancel"), value: "cancel" },
       { label: t("common.save"), value: "save", kind: "primary" },
@@ -769,7 +756,7 @@ async function openSettings(): Promise<void> {
             launchAtStartup: checked("launchAtStartup"),
             loginMethod: $<HTMLInputElement>('[name="loginMethod"]:checked', root).value as Settings["loginMethod"],
             launchGame: checked("launchGame"),
-            checkUpdates: checked("checkUpdates"),
+            autoUpdate: checked("autoUpdate"),
           }),
         "toast.settingsFailed",
       );
@@ -817,7 +804,7 @@ function openAddDrawer(tab: "single" | "multi" = "single"): void {
             <label class="field"><span>${t("add.password")}</span>
               <div class="password">
                 <input name="password" type="password" autocomplete="new-password" />
-                <button type="button" class="icon-btn" data-reveal title="${esc(t("add.show"))}">${icon("eye", 15)}</button>
+                <button type="button" class="icon-btn" data-reveal aria-label="${esc(t("add.show"))}" data-tooltip="${esc(t("add.show"))}">${icon("eye", 15)}</button>
               </div></label>
             <label class="field"><span>${t("edit.description")} <em>${t("add.optional")}</em></span>
               <input name="description" autocomplete="off" placeholder="${esc(t("edit.descriptionPh"))}" /></label>
@@ -874,11 +861,12 @@ function openAddDrawer(tab: "single" | "multi" = "single"): void {
 
   const textarea = $<HTMLTextAreaElement>("textarea", overlay);
   const counter = $(".multi-count", overlay);
-  textarea.addEventListener("input", () => {
+  const updateMultiCount = () => {
     const lines = textarea.value.split("\n").filter((line) => line.trim());
     const valid = lines.filter((line) => parseAccountLine(line));
     counter.textContent = lines.length ? t("add.multiCount", { valid: valid.length, total: lines.length }) : "";
-  });
+  };
+  textarea.addEventListener("input", updateMultiCount);
 
   const single = $<HTMLFormElement>('[data-panel="single"]', overlay);
   single.addEventListener("submit", async (event) => {
@@ -919,6 +907,8 @@ function openAddDrawer(tab: "single" | "multi" = "single"): void {
   const multi = $<HTMLFormElement>('[data-panel="multi"]', overlay);
   multi.addEventListener("submit", async (event) => {
     event.preventDefault();
+    const button = $<HTMLButtonElement>('button[type="submit"]', multi);
+    if (button.disabled) return;
     const data = new FormData(multi);
     const text = String(data.get("text") ?? "");
     const region = String(data.get("region") ?? "");
@@ -927,20 +917,31 @@ function openAddDrawer(tab: "single" | "multi" = "single"): void {
       return;
     }
     rememberRegion(region);
-    const result = await guard(() => api.multiAdd(text, region), "toast.multiFailed");
-    if (!result) return;
-    state.accounts = await api.listAccounts();
-    render();
-    // Keep only the lines that were not added, so they can be fixed and resubmitted.
-    const inputLines = text.split("\n");
-    textarea.value = result.skippedLines.map((index) => inputLines[index]).join("\n");
-    textarea.dispatchEvent(new Event("input"));
-    toast(
-      result.added ? "success" : "info",
-      t("toast.multiAdded", { count: result.added }),
-      result.skipped ? t("toast.multiSkipped", { count: result.skipped }) : "",
-    );
-    if (result.added && !result.skipped) close();
+    const regionSelect = $<HTMLSelectElement>('[name="region"]', multi);
+    button.disabled = true;
+    textarea.readOnly = true;
+    regionSelect.disabled = true;
+    try {
+      const result = await guard(() => api.multiAdd(text, region), "toast.multiFailed");
+      if (!result) return;
+      const lines = text.split("\n");
+      textarea.value = result.skippedLines.map((index) => lines[index]).join("\n");
+      updateMultiCount();
+      state.accounts = await api.listAccounts();
+      render();
+      const skipped = result.skippedLines.length;
+      toast(
+        result.added ? "success" : "info",
+        t("toast.multiAdded", { count: result.added }),
+        skipped ? t("toast.multiSkipped", { count: skipped }) : "",
+      );
+      if (result.added && !skipped) close();
+      else textarea.focus();
+    } finally {
+      button.disabled = false;
+      textarea.readOnly = false;
+      regionSelect.disabled = false;
+    }
   });
 }
 
@@ -1003,6 +1004,7 @@ function showShortcuts(): void {
     ["Ctrl + F", t("sc.search")],
     ["Ctrl + N", t("sc.add")],
     ["Ctrl + R / F5", t("sc.refresh")],
+    ["Ctrl + Shift + R / Shift + F5", t("sc.forceRefresh")],
     ["Ctrl + 1 / 2", t("sc.mode")],
     ["Ctrl + ,", t("sc.settings")],
     [t("sc.dblclick"), t("sc.dblclickText")],
@@ -1030,20 +1032,6 @@ function applyLanguage(): void {
   friendTier.value = selectedTier;
 }
 
-function openLangMenu(): void {
-  const rect = $("#lang").getBoundingClientRect();
-  contextMenu(
-    rect.left,
-    rect.bottom + 6,
-    LANGUAGES.map((language) => ({
-      label: language.name,
-      icon: language.code === lang() ? "check" : "languages",
-      run: () => changeLanguage(language.code),
-    })),
-    "language",
-  );
-}
-
 function changeLanguage(next: Lang): void {
   if (next === lang()) return;
   setLang(next);
@@ -1054,6 +1042,7 @@ function changeLanguage(next: Lang): void {
 // ---------------------------------------------------------------- wiring
 
 function wire(): void {
+  $("#clear-filters").addEventListener("click", clearFilters);
   document.querySelectorAll<HTMLButtonElement>(".mode-btn").forEach((button) => {
     button.addEventListener("click", () => setMode(button.dataset.mode as Mode));
   });
@@ -1100,7 +1089,6 @@ function wire(): void {
 
   $("#schedule").addEventListener("click", () => void refreshAll());
   $("#open-add").addEventListener("click", () => openAddDrawer());
-  $("#lang").addEventListener("click", openLangMenu);
   document.querySelectorAll<HTMLButtonElement>("[data-action]").forEach((button) => {
     button.addEventListener("click", () => {
       const action = button.dataset.action;
@@ -1158,14 +1146,6 @@ function wire(): void {
     if (!account) return;
     event.preventDefault();
     openMenu(account, event.clientX, event.clientY);
-  });
-  // Pointer-tracked highlight on cards.
-  accounts.addEventListener("pointermove", (event) => {
-    const card = (event.target as HTMLElement).closest<HTMLElement>(".card");
-    if (!card) return;
-    const rect = card.getBoundingClientRect();
-    card.style.setProperty("--mx", `${event.clientX - rect.left}px`);
-    card.style.setProperty("--my", `${event.clientY - rect.top}px`);
   });
 
   document.addEventListener("contextmenu", (event) => {
@@ -1231,7 +1211,7 @@ function onKeyDown(event: KeyboardEvent): void {
 
   if ((ctrl && key === "r") || event.key === "F5") {
     event.preventDefault();
-    if (!overlayOpen) void refreshAll();
+    if (!overlayOpen) void refreshAll(event.shiftKey);
     return;
   }
   if (overlayOpen) return;
@@ -1300,21 +1280,28 @@ function onKeyDown(event: KeyboardEvent): void {
 async function wireWindow(): Promise<void> {
   const { getCurrentWindow } = await import("@tauri-apps/api/window");
   const appWindow = getCurrentWindow();
-  const buttons: Record<string, [string, () => Promise<void>]> = {
-    minimize: ["minus", () => appWindow.minimize()],
-    maximize: ["square", () => appWindow.toggleMaximize()],
-    close: ["x", () => appWindow.close()],
+  const actions: Record<string, () => Promise<void>> = {
+    minimize: () => appWindow.minimize(),
+    maximize: () => appWindow.toggleMaximize(),
+    close: () => appWindow.close(),
   };
   document.querySelectorAll<HTMLButtonElement>("[data-win]").forEach((button) => {
-    const [name, run] = buttons[button.dataset.win ?? ""];
-    button.innerHTML = icon(name, name === "square" ? 12 : 15);
-    button.addEventListener("click", () => void run());
+    button.addEventListener("click", () => void actions[button.dataset.win ?? ""]());
   });
+  // Maximize turns into restore while maximized, including after a title bar double-click.
+  const maximize = $<HTMLButtonElement>('[data-win="maximize"]');
+  const sync = async () => {
+    const maximized = await appWindow.isMaximized();
+    maximize.classList.toggle("is-maximized", maximized);
+    maximize.dataset.i18nAria = maximized ? "win.restore" : "win.maximize";
+    applyStatic(maximize.parentElement!);
+  };
+  void sync();
+  void appWindow.onResized(() => void sync());
 }
 
 async function wireEvents(): Promise<void> {
   await events.onLoginStep((step) => activeLogin?.step(step));
-  await events.onUpdateAvailable((release) => showUpdate(release));
   await events.onRefreshStarted(({ total }) => {
     state.refreshing = true;
     state.refreshTotal = total;
@@ -1337,15 +1324,18 @@ async function wireEvents(): Promise<void> {
     renderDistribution();
     renderSchedule();
   });
-  await events.onRefreshDone(({ error, exclusive, auto }) => {
+  await events.onAccountUpdate((account) => {
+    upsert(account);
+    renderAccounts();
+  });
+  await events.onRefreshDone(({ error, exclusive }) => {
     if (error) toast("error", t("toast.ranksSaveFailed"), describe(new ApiError(error.code, error.detail)), 5000);
     // Only a full refresh ends the progress state; single-account refreshes
     // (after adding or renaming) may finish while it is still running.
+    // Success is silent: the cards and the header countdown already show it.
     if (exclusive && state.refreshing) {
       state.refreshing = false;
       state.pending.clear();
-      if (!error && auto) toast("info", t("toast.autoRefreshed"), t("toast.ranksUpdatedText", { count: state.refreshTotal }), 2600);
-      else if (!error) toast("success", t("toast.ranksUpdated"), t("toast.ranksUpdatedText", { count: state.refreshTotal }));
     }
     render();
   });
@@ -1353,12 +1343,12 @@ async function wireEvents(): Promise<void> {
 
 const IN_TAURI = "__TAURI_INTERNALS__" in window;
 
+/** An update restart waits while the user is doing something. */
+const uiBusy = (): boolean =>
+  Boolean(activeLogin || state.refreshing || document.querySelector(".overlay, .drawer-overlay, .login-overlay, .menu, .is-open"));
+
 /** Dev-only: `?scene=` opens a screen with demo data (used for README screenshots). */
 function runDemoScene(): void {
-  document.querySelectorAll<HTMLButtonElement>("[data-win]").forEach((button) => {
-    const names: Record<string, string> = { minimize: "minus", maximize: "square", close: "x" };
-    button.innerHTML = icon(names[button.dataset.win ?? ""], button.dataset.win === "maximize" ? 12 : 15);
-  });
   const scene = new URLSearchParams(location.search).get("scene");
   const byName = (part: string) => state.accounts.find((account) => account.name.includes(part))!;
   const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -1370,11 +1360,12 @@ function runDemoScene(): void {
       $("#accounts").innerHTML = "";
       render();
     }
-    if (scene === "chart") void openChart(byName("Kebab"));
     if (scene === "settings") void openSettings();
     if (scene === "add") openAddDrawer();
     if (scene === "login") void login(byName("Hextech"));
-    if (scene === "update") showUpdate({ version: "3.1.0", name: "v3.1.0", url: "", notes: "", publishedAt: "" }, true);
+    // The mock bans Kebab Enjoyer: logging in asks first, with the time left.
+    if (scene === "banned") void login(byName("Kebab"));
+    if (scene === "update") showUpdateBanner({ version: "3.1.0", name: "v3.1.0", url: "", notes: "", publishedAt: "" }, true);
     if (scene === "menu") {
       const card = document.querySelector<HTMLElement>("#accounts > .card:nth-child(2)")!;
       const rect = card.getBoundingClientRect();
@@ -1384,12 +1375,20 @@ function runDemoScene(): void {
 }
 
 async function start(): Promise<void> {
-  if (!IN_TAURI && import.meta.env.DEV) (await import("./mock")).installMock();
+  if (!IN_TAURI && import.meta.env.DEV) {
+    (await import("./mock")).installMock();
+    $("#dev-tools").hidden = false;
+    $("#reset-demo").addEventListener("click", () => {
+      localStorage.removeItem(PREFS_KEY);
+      location.reload();
+    });
+  }
   loadPrefs();
   setLang(lang());
   applyLanguage();
-  installEmblemDefs(document.getElementById("emblem-defs") as unknown as SVGDefsElement);
   hydrateIcons();
+  wireTooltips();
+  wireControlMotion();
   wire();
   const boot = await api.bootstrap();
   state.accounts = boot.accounts;
@@ -1400,14 +1399,16 @@ async function start(): Promise<void> {
   render();
   if (boot.loadError) toast("error", t("toast.loadFailed"), errorText(boot.loadError.code, boot.loadError.detail), 8000);
   if (!boot.loggingAvailable) toast("info", t("toast.noLogging"), t("toast.noLoggingText"));
-  await Promise.all([wireEvents(), IN_TAURI ? wireWindow() : Promise.resolve()]);
+  await Promise.all([wireEvents(), wireUpdates({ busy: uiBusy }), IN_TAURI ? wireWindow() : Promise.resolve()]);
   renderSchedule();
-  setInterval(renderSchedule, 20_000);
+  setInterval(renderSchedule, 1000);
+  // Cards only rebuild when their signature changes, e.g. "Updated" turning stale.
+  setInterval(renderAccounts, 30_000);
+  // An update found at launch shows the update screen instead of the app.
+  if (!(await launchUpdate(revealApp))) await revealApp();
   if (!IN_TAURI && import.meta.env.DEV) runDemoScene();
-  document.body.classList.add("ready");
 }
 
-start().catch((error) => {
-  document.body.classList.add("ready");
-  toast("error", t("toast.startFailed"), String(error), 10000);
-});
+observeSelects();
+watchTierNames();
+void start().catch(failStartup);

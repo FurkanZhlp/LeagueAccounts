@@ -7,7 +7,7 @@
 import type { HistoryPoint, TrendPoint } from "./api";
 import { esc } from "./dom";
 import { lang, t, tierName } from "./i18n";
-import { emblem, palette } from "./ranks";
+import { palette, type Mode } from "./ranks";
 
 const LADDER = ["Iron", "Bronze", "Silver", "Gold", "Platinum", "Emerald", "Diamond"];
 const DIVISIONS = ["IV", "III", "II", "I"];
@@ -84,7 +84,13 @@ function ticks(t0: number, t1: number, count: number): number[] {
  * Render the history chart into `root`. Returns nothing; interactivity
  * (crosshair + tooltip) is wired on the inserted SVG.
  */
-export function renderHistoryChart(root: HTMLElement, all: HistoryPoint[], range: Range): void {
+/** Rank crest as an SVG `<image>` (HTML `<img>` cannot live inside the chart's SVG). */
+function crest(tier: string, mode: Mode): string {
+  const asset = tier.toLowerCase();
+  return `/league/crests/${asset}${mode === "tft" ? "-tft" : ""}.svg`;
+}
+
+export function renderHistoryChart(root: HTMLElement, all: HistoryPoint[], range: Range, mode: Mode = "lol"): void {
   const now = Date.now();
   const inRange = all.filter((point) => now - point.t <= RANGE_MS[range]);
   // Carry the last point before the window so the line starts at its edge.
@@ -133,8 +139,8 @@ export function renderHistoryChart(root: HTMLElement, all: HistoryPoint[], range
     const labelY = base >= APEX_BASE ? Math.min(y1 - 12, pad.top + 14) : (y0 + y1) / 2;
     if (y1 - y0 > 18) {
       labels.push(`<g transform="translate(${pad.left - 12}, ${labelY.toFixed(1)})">
-        <g transform="translate(-16,-9)">${emblem(tier, 18)}</g>
-        <text class="axis-label" x="-22" y="4" text-anchor="end">${esc(base >= APEX_BASE ? `${tierName("Master")}+` : tierName(tier))}</text>
+        <image href="${crest(tier, mode)}" x="-20" y="-9" width="18" height="18"/>
+        <text class="axis-label" x="-26" y="4" text-anchor="end">${esc(base >= APEX_BASE ? `${tierName("Master")}+` : tierName(tier))}</text>
       </g>`);
     }
     if (base >= APEX_BASE) {
